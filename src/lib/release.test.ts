@@ -209,3 +209,32 @@ describe('medir imágenes', () => {
     expect(imageWidth(new Uint8Array([1, 2, 3, 4]))).toBeNull()
   })
 })
+
+describe('el índice con preliminares', () => {
+  it('las páginas de cortesía no cuentan como capítulos sin entrada', async () => {
+    const { addFrontMatter, suggestText } = await import('./frontMatter')
+    const b = book()
+    addFrontMatter(b, ['portadilla', 'portada', 'creditos'], suggestText(b))
+    const bl = reviewRelease(b).blocks.find(x => x.id === 'indice')!
+    expect(bl.level).toBe('ok')
+    expect(bl.summary).toContain('para 1 capítulo')
+  })
+
+  it('dice si hay página de índice visible', async () => {
+    const { createVisibleToc } = await import('./visibleToc')
+    const b = book()
+    createVisibleToc(b)
+    expect(reviewRelease(b).blocks.find(x => x.id === 'indice')!.summary).toContain('página de índice visible')
+  })
+
+  it('y avisa si se quedó atrás', async () => {
+    const { createVisibleToc } = await import('./visibleToc')
+    const b = book()
+    createVisibleToc(b)
+    const cap = b.files.get('OEBPS/Text/Cap01.xhtml')!
+    cap.text = cap.text!.replace('<h1>Capítulo 1</h1>', '<h1>Otro título</h1>')
+    const bl = reviewRelease(b).blocks.find(x => x.id === 'indice')!
+    expect(bl.level).toBe('warn')
+    expect(bl.advice).toContain('no dice lo que hay ahora')
+  })
+})

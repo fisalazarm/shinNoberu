@@ -9,7 +9,7 @@
 // semáforo. Lo que rompe el libro o lo que una tienda rechaza es rojo; lo que
 // solo conviene arreglar es amarillo.
 
-import { isTextFile, parseManifest, spinePaths, type EpubBook } from './epub'
+import { isTextFile, parseManifest, type EpubBook } from './epub'
 import { reviewDialogue, fixable } from './dialogue'
 import { findBrokenLinks, findOrphans, prettyBytes, totalBytes } from './housekeeping'
 import { coverImagePath, readMetadata } from './metadata'
@@ -17,6 +17,7 @@ import { findNames, inconsistent } from './names'
 import { bookReport } from './report'
 import { navItemPath, readToc } from './structure'
 import { countBySeverity, validateBook } from './validate'
+import { isStale, tocLines, visibleTocPath } from './visibleToc'
 
 export type Level = 'ok' | 'warn' | 'error'
 
@@ -167,14 +168,21 @@ function tocBlock(book: EpubBook): Block {
     }
   }
   const entries = readToc(book).length
-  const chapters = spinePaths(book).filter(p => p !== nav).length
+  // Capítulos de verdad: ni los preliminares ni la propia página de índice
+  // cuentan, o un libro con portadilla y créditos parecería tener de menos.
+  const chapters = tocLines(book).length
   const pocas = entries === 0 || entries < chapters / 2
+  const visible = visibleTocPath(book)
+  const atrasada = visible != null && isStale(book)
+  const pagina = visible ? ' Con página de índice visible.' : ''
   return {
     id: 'indice',
     label: 'Índice',
-    level: pocas ? 'warn' : 'ok',
-    summary: `${entries} entrada${entries === 1 ? '' : 's'} para ${chapters} capítulo${chapters === 1 ? '' : 's'}.`,
-    advice: pocas ? 'Puede que falten títulos o que haya que regenerarlo.' : undefined,
+    level: pocas || atrasada ? 'warn' : 'ok',
+    summary: `${entries} entrada${entries === 1 ? '' : 's'} para ${chapters} capítulo${chapters === 1 ? '' : 's'}.${pagina}`,
+    advice: atrasada
+      ? 'La página de índice visible no dice lo que hay ahora: edita algo o vuelve a añadirla para rehacerla.'
+      : pocas ? 'Puede que falten títulos o que haya que regenerarlo.' : undefined,
     opens: 'toc',
   }
 }

@@ -67,6 +67,8 @@ import { importChapters, readDocx, type ChapterDraft, type DocxDoc } from './lib
 import { fixDialogue, type DialogueIssue } from './lib/dialogue'
 import { DEVICES, deviceById } from './lib/devices'
 import type { Opens } from './lib/release'
+import { createVisibleToc, refreshVisibleToc, removeVisibleToc, visibleTocPath } from './lib/visibleToc'
+import { countFootnotes, notesPagePath, toEndnotes, toFootnotes } from './lib/endnotes'
 import {
   applyTemplate, defaultTemplate, importTemplates, type ApplyOptions, type LayoutTemplate,
 } from './lib/layoutTemplate'
@@ -277,6 +279,15 @@ export default function App() {
     }, 250)
     return () => clearTimeout(t)
   }, [book, previewPath, rev, resolver, zoom, paper])
+
+  // La página de índice visible se rehace sola cuando cambian los capítulos.
+  // Solo con cambios del usuario: abrir un libro no debe marcarlo como
+  // modificado sin haber tocado nada.
+  useEffect(() => {
+    if (!dirty) return
+    const t = setTimeout(() => { if (refreshVisibleToc(book)) touch() }, 800)
+    return () => clearTimeout(t)
+  }, [book, rev, dirty, touch])
 
   useEffect(() => {
     try { localStorage.setItem(PASTE_KEY, JSON.stringify(pasteOptions)) } catch { /* ignorar */ }
@@ -847,6 +858,37 @@ export default function App() {
     })
   }
 
+  const doToggleVisibleToc = () => {
+    if (visibleTocPath(book)) {
+      bulk('Antes de quitar la página de índice', () =>
+        removeVisibleToc(book) ? 'Página de índice quitada' : null)
+      return
+    }
+    bulk('Antes de añadir la página de índice', () => {
+      const r = createVisibleToc(book)
+      openFile(r.path)
+      return `Página de índice con ${r.entries} capítulo${r.entries === 1 ? '' : 's'}`
+    })
+  }
+
+  const doToEndnotes = () => {
+    // Sin esto, el menú no haría nada visible en un libro sin notas.
+    if (!countFootnotes(book) && !notesPagePath(book)) return flash('El libro no tiene notas al pie que pasar')
+    bulk('Antes de pasar las notas al final', () => {
+      const r = toEndnotes(book)
+      if (!r) return null
+      if (r.path) openFile(r.path)
+      return `${r.notes} nota${r.notes === 1 ? '' : 's'} al final del libro · regenera el índice para que salga «Notas»`
+    })
+  }
+
+  const doToFootnotes = () => {
+    bulk('Antes de devolver las notas al pie', () => {
+      const r = toFootnotes(book)
+      return r ? `${r.notes} nota${r.notes === 1 ? '' : 's'} de vuelta al pie de su capítulo` : null
+    })
+  }
+
   /** Desde «Antes de publicar» se salta al panel que arregla cada cosa. */
   const openFromRelease = (what: Opens) => {
     // «Revisar» no es un diálogo: calcula los problemas y luego los enseña.
@@ -992,6 +1034,8 @@ export default function App() {
   }, [activeFile])
   useEffect(() => () => { if (imageUrl) URL.revokeObjectURL(imageUrl) }, [imageUrl])
 
+  // `rev` entra a propósito: el libro se modifica en el sitio.
+  const hasEndnotes = useMemo(() => !!notesPagePath(book), [book, rev])
   const sheetCss = SHEETS.find(s => s.id === sheet)!.css
   const screen = deviceById(device) ?? null
   const charAt = isText ? charInfo(cursor.char) : null
@@ -1066,6 +1110,10 @@ export default function App() {
       label: 'Libro',
       items: [
         { label: 'Regenerar índice…', onClick: () => setDialog({ kind: 'toc' }) },
+        { label: 'Página de índice visible', checked: !!visibleTocPath(book), onClick: doToggleVisibleToc },
+        { separator: true },
+        { label: 'Pasar las notas al final', onClick: doToEndnotes },
+        { label: 'Devolver las notas al pie', disabled: !hasEndnotes, onClick: doToFootnotes },
         { label: 'Duplicar este archivo', disabled: !activeFile, onClick: () => doDuplicate(active) },
         { label: 'Partir capítulo…', disabled: !isDoc, onClick: () => setDialog({ kind: 'split', cursor: view.current?.state.selection.main.head ?? 0 }) },
         { separator: true },
