@@ -1,0 +1,17 @@
+[
+  { "name": "Párrafo", "key": "Mod-p", "wrap": ["<p>", "</p>"] },
+  { "name": "Cursiva", "key": "Mod-i", "wrap": ["<em>", "</em>"] },
+  { "name": "Negrita", "key": "Mod-b", "wrap": ["<strong>", "</strong>"] },
+  { "name": "Span con clase", "key": "Mod-Shift-s", "wrap": ["<span class=\"|\">", "</span>"] },
+  { "name": "Párrafo centrado", "key": "Mod-e", "wrap": ["<p class=\"centro\">", "</p>"] },
+  { "name": "Párrafo sin sangría", "key": "Mod-Shift-p", "wrap": ["<p class=\"sin-sangria\">", "</p>"] },
+  { "name": "Título h1", "key": "Alt-1", "wrap": ["<h1>", "</h1>"] },
+  { "name": "Título h2", "key": "Alt-2", "wrap": ["<h2>", "</h2>"] },
+  { "name": "Separador ◇", "key": "Mod-Shift-8", "insert": "<p class=\"separador\">◇◇◇</p>" },
+  { "name": "Ilustración (figure.dimg)", "insert": "<figure class=\"dimg\">\n  <img alt=\"\" src=\"../Images/|\"/>\n</figure>" },
+  { "name": "Llamada a nota (N. del T.)", "insert": "<a class=\"nota\" epub:type=\"noteref\" href=\"#nota1\" id=\"ref1\" role=\"doc-noteref\">[1]</a>" },
+  { "name": "Nota del traductor", "insert": "<aside class=\"nota-trad\" epub:type=\"footnote\" id=\"nota1\" role=\"doc-footnote\">\n  <p><a href=\"#ref1\">[1]</a> |</p>\n</aside>" },
+  { "name": "Comillas 「」", "key": "Mod-Shift-9", "wrap": ["「", "」"] },
+  { "name": "Comillas 『』", "key": "Mod-Shift-0", "wrap": ["『", "』"] },
+  { "name": "Raya de diálogo —", "key": "Mod-Shift--", "insert": "—|" }
+]
