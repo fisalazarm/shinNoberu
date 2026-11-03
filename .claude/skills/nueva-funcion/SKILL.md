@@ -1,6 +1,6 @@
 ---
 name: nueva-funcion
-description: Receta para añadir una función nueva al EPUB Editor siguiendo cómo está hecho el proyecto (módulo puro en src/lib con pruebas, diálogo con Modal, unión en App.tsx con bulk/touch/flash, menú, CSS, revisión de «Antes de publicar»). Úsala cuando el usuario pida una herramienta, panel, diálogo, revisión o acción nueva para el editor, o al proponer y luego construir mejoras.
+description: Receta para añadir una función nueva a ShinNoberu siguiendo cómo está hecho el proyecto (módulo puro en src/lib con pruebas, diálogo con Modal, unión en App.tsx con bulk/touch/flash, menú, CSS, revisión de «Antes de publicar»). Úsala cuando el usuario pida una herramienta, panel, diálogo, revisión o acción nueva para el editor, o al proponer y luego construir mejoras.
 ---
 
 # Añadir una función

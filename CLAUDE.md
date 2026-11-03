@@ -1,6 +1,6 @@
-# EPUB Editor
+# ShinNoberu
 
-Editor de EPUB 3 para maquetar novelas (sobre todo novelas ligeras traducidas
+ShinNoberu (新ノベル) es un editor de EPUB 3 para maquetar novelas (sobre todo novelas ligeras traducidas
 al español). App de escritorio con Tauri 2; la interfaz es React + TypeScript
 + CodeMirror 6 y el libro se maneja en memoria con JSZip.
 

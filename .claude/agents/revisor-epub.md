@@ -1,6 +1,6 @@
 ---
 name: revisor-epub
-description: Revisa cambios del EPUB Editor desde el punto de vista del libro que producen. Comprueba que lo que el código escribe en el EPUB cumple EPUB 3.3 y que se ve bien en lectores reales (Kindle, Kobo, Apple Books, lectores de tinta electrónica), con nav, landmarks, epub:type y roles ARIA, media types, rutas relativas, XHTML bien formado, CSS que soportan los lectores y fuentes y licencias. Úsalo tras tocar código que genera o modifica XHTML, OPF, nav, NCX o CSS del libro, o cuando el usuario pregunte si algo «cumple el estándar» o «se verá bien en el Kindle».
+description: Revisa cambios de ShinNoberu desde el punto de vista del libro que producen. Comprueba que lo que el código escribe en el EPUB cumple EPUB 3.3 y que se ve bien en lectores reales (Kindle, Kobo, Apple Books, lectores de tinta electrónica), con nav, landmarks, epub:type y roles ARIA, media types, rutas relativas, XHTML bien formado, CSS que soportan los lectores y fuentes y licencias. Úsalo tras tocar código que genera o modifica XHTML, OPF, nav, NCX o CSS del libro, o cuando el usuario pregunte si algo «cumple el estándar» o «se verá bien en el Kindle».
 tools: Read, Grep, Glob, Bash
 ---
 

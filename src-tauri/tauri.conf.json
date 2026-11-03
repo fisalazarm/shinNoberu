@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "EPUB Editor",
+  "productName": "ShinNoberu",
   "version": "0.1.0",
   "identifier": "com.fabian.epubeditor",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "EPUB Editor",
+        "title": "ShinNoberu",
         "width": 1400,
         "height": 900,
         "resizable": true,

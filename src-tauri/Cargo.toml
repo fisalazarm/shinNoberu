@@ -1,7 +1,7 @@
 [package]
 name = "epub-editor"
 version = "0.1.0"
-description = "Editor de EPUB"
+description = "ShinNoberu: editor de EPUB para maquetar novelas"
 authors = ["you"]
 license = ""
 repository = ""

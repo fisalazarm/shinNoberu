@@ -1,6 +1,6 @@
 ---
 name: investigador-funciones
-description: Investiga qué funciones le faltan al EPUB Editor y propone cuáles integrar. Para eso hace inventario de lo que la app ya hace, estudia otros editores y maquetadores (Sigil, Calibre, Vellum, Atticus, Jutoh, Kindle Create, Reedsy Studio, InDesign), los requisitos de tiendas y lectores (KDP, Kobo, Apple Books, Google Play) y lo que piden en foros quienes maquetan novelas, y devuelve propuestas priorizadas por valor y esfuerzo, con cómo encajarían en el código. Úsalo cuando el usuario pregunte «qué más podemos agregar», «qué le falta», «qué tienen otros editores» o pida ideas o una hoja de ruta.
+description: Investiga qué funciones le faltan a ShinNoberu y propone cuáles integrar. Para eso hace inventario de lo que la app ya hace, estudia otros editores y maquetadores (Sigil, Calibre, Vellum, Atticus, Jutoh, Kindle Create, Reedsy Studio, InDesign), los requisitos de tiendas y lectores (KDP, Kobo, Apple Books, Google Play) y lo que piden en foros quienes maquetan novelas, y devuelve propuestas priorizadas por valor y esfuerzo, con cómo encajarían en el código. Úsalo cuando el usuario pregunte «qué más podemos agregar», «qué le falta», «qué tienen otros editores» o pida ideas o una hoja de ruta.
 tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, Write
 ---
 

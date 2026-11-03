@@ -16,6 +16,7 @@ import TocDialog from './components/TocDialog'
 import SeriesDialog from './components/SeriesDialog'
 import FontsDialog from './components/FontsDialog'
 import NotesDialog from './components/NotesDialog'
+import AboutDialog from './components/AboutDialog'
 import SpellDialog from './components/SpellDialog'
 import ContextMenu, { type ContextTarget } from './components/ContextMenu'
 import type { SpellMenuRequest } from './components/Editor'
@@ -130,6 +131,7 @@ type Dialog =
   | { kind: 'docx'; doc: DocxDoc; fileName: string }
   | { kind: 'dialogue' }
   | { kind: 'notes' }
+  | { kind: 'about' }
   | { kind: 'release' }
   | { kind: 'pickVar'; ask: Ask }
   | { kind: 'templates' }
@@ -369,7 +371,7 @@ export default function App() {
   )
 
   useEffect(() => {
-    document.title = `${dirty ? '● ' : ''}${fileName} — EPUB Editor`
+    document.title = `${dirty ? '● ' : ''}${fileName} — ShinNoberu`
   }, [dirty, fileName])
 
   // ---------- pestañas ----------
@@ -1342,6 +1344,7 @@ export default function App() {
         },
         { separator: true },
         { label: 'Preferencias…', shortcut: 'Ctrl+,', onClick: () => setDialog({ kind: 'settings' }) },
+        { label: 'Acerca de ShinNoberu…', onClick: () => setDialog({ kind: 'about' }) },
       ],
     },
   ]
@@ -1386,7 +1389,14 @@ export default function App() {
         onDrop(e.dataTransfer.files)
       }}
     >
-      <MenuBar menus={menus} />
+      <MenuBar
+        menus={menus}
+        brand={(
+          <button className="brand" title="Acerca de ShinNoberu" onClick={() => setDialog({ kind: 'about' })}>
+            <img src="/shinnoberu-barra.svg" alt="ShinNoberu" />
+          </button>
+        )}
+      />
 
       <header className="toolbar">
         <button onClick={() => doSave()} title="Ctrl+S">{canSaveInPlace() ? 'Guardar' : 'Descargar'}</button>
@@ -1747,6 +1757,7 @@ export default function App() {
       {dialog?.kind === 'release' && (
         <ReleaseDialog book={book} rev={rev} onOpen={openFromRelease} onClose={() => setDialog(null)} />
       )}
+      {dialog?.kind === 'about' && <AboutDialog onClose={() => setDialog(null)} />}
       {dialog?.kind === 'notes' && (
         <NotesDialog book={book} rev={rev} onGo={jump} onClose={() => setDialog(null)} />
       )}

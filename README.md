@@ -1,6 +1,8 @@
-# EPUB Editor
+<h1 align="center">
+  <img src="public/shinnoberu-te-verde.png" alt="ShinNoberu 新ノベル" width="520">
+</h1>
 
-Editor de EPUB 3 de escritorio pensado para **maquetar novelas**, en especial
+**ShinNoberu** es un editor de EPUB 3 de escritorio pensado para **maquetar novelas**, en especial
 novelas ligeras traducidas al español. Trabaja directamente sobre el XHTML del
 libro, como Sigil, pero añade lo que hace falta para dejar una novela lista
 para publicar: estilos de novela, notas del traductor, ortografía en español,

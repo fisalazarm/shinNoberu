@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 export interface MenuItem {
   label?: string
@@ -18,7 +18,7 @@ export interface MenuDef {
 
 const usable = (it: MenuItem) => !it.separator && !it.disabled
 
-export default function MenuBar({ menus }: { menus: MenuDef[] }) {
+export default function MenuBar({ menus, brand }: { menus: MenuDef[]; brand?: ReactNode }) {
   const [open, setOpen] = useState<number | null>(null)
   const [focus, setFocus] = useState(-1)
   const root = useRef<HTMLDivElement>(null)
@@ -95,6 +95,7 @@ export default function MenuBar({ menus }: { menus: MenuDef[] }) {
 
   return (
     <div className="menubar" ref={root} role="menubar">
+      {brand}
       {menus.map((menu, i) => (
         <div key={menu.label} className="menu-slot">
           <button

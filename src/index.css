@@ -1466,6 +1466,26 @@ body.dragging-row iframe { pointer-events: none; }
   z-index: 9;
 }
 .menu-slot { position: relative; }
+
+/* El logo a la izquierda de los menús: abre «Acerca de». */
+.menubar .brand {
+  display: flex;
+  align-items: center;
+  padding: 1px 8px 1px 2px;
+  margin-right: 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.menubar .brand:hover:not(:disabled) { background: transparent; border-color: transparent; }
+.menubar .brand img { height: 28px; width: auto; display: block; transition: transform var(--ease); }
+.menubar .brand:hover img { transform: scale(1.04); }
+
+.about-dialog { width: min(520px, 92vw); }
+.about-body { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 6px 4px 10px; }
+.about-logo { width: min(400px, 80vw); height: auto; }
+.about-tagline { margin: 4px 0 0; font-size: 15px; color: var(--text); }
+.about-credits { max-width: 38em; margin-top: 6px; }
 .menu-title {
   border: 0;
   border-radius: 0;

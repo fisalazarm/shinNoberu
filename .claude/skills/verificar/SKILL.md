@@ -1,6 +1,6 @@
 ---
 name: verificar
-description: Pasa la verificación completa del EPUB Editor (tipos, pruebas, build, lint y, si cambió la interfaz, prueba en el navegador) y resume el resultado. Úsala antes de decir que algo está hecho, antes de un commit, cuando el usuario pregunte si todo funciona o tras un cambio grande o tocar varios archivos.
+description: Pasa la verificación completa de ShinNoberu (tipos, pruebas, build, lint y, si cambió la interfaz, prueba en el navegador) y resume el resultado. Úsala antes de decir que algo está hecho, antes de un commit, cuando el usuario pregunte si todo funciona o tras un cambio grande o tocar varios archivos.
 ---
 
 # Verificar

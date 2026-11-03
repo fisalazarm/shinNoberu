@@ -1,6 +1,6 @@
 ---
 name: probar-en-navegador
-description: Prueba el EPUB Editor en un navegador de verdad (Edge sin ventana, por CDP) con clics, teclas, arrastres y selectores de archivo reales, y saca capturas. Úsala siempre que un cambio toque la interfaz (diálogos, menús, editor, vista previa, árbol de archivos) antes de decir que funciona, cuando el usuario pida «pruébalo», «comprueba que se ve bien» o una captura, o cuando una prueba unitaria no basta para saber si algo funciona en la app.
+description: Prueba ShinNoberu en un navegador de verdad (Edge sin ventana, por CDP) con clics, teclas, arrastres y selectores de archivo reales, y saca capturas. Úsala siempre que un cambio toque la interfaz (diálogos, menús, editor, vista previa, árbol de archivos) antes de decir que funciona, cuando el usuario pida «pruébalo», «comprueba que se ve bien» o una captura, o cuando una prueba unitaria no basta para saber si algo funciona en la app.
 ---
 
 # Probar en el navegador
