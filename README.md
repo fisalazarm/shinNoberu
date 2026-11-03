@@ -8,6 +8,27 @@ libro, como Sigil, pero añade lo que hace falta para dejar una novela lista
 para publicar: estilos de novela, notas del traductor, ortografía en español,
 fuentes incrustadas y una revisión final antes de subir el libro a la tienda.
 
+## Por qué existe
+
+Me encantan las novelas, sobre todo las novelas ligeras. Pero muchas de las que
+quiero leer solo existen en PDF o repartidas por páginas web, y ninguna de las
+dos cosas se lee bien en un lector de tinta electrónica: el PDF no se adapta a la
+pantalla y la web no se lleva en el bolsillo.
+
+Quería tenerlas en mi ebook como un libro de verdad, con su portada, su índice,
+sus notas y sus capítulos bien maquetados. Hacerlo a mano era lento y dejaba
+errores por todas partes, así que construí la herramienta que me faltaba. Esa es
+ShinNoberu: un taller para que esas historias lleguen al lector tan bien
+presentadas como merecen.
+
+> [!NOTE]
+> **Este proyecto está hecho con *vibe coding*.** El código lo escribió una IA
+> ([Claude Code](https://claude.com/claude-code)) a partir de conversaciones en
+> las que se pedía cada función, se probaba y se corregía lo que no gustaba. Tiene
+> pruebas automáticas y se prueba en un navegador real, pero nadie lo ha revisado
+> línea a línea como se revisa un proyecto escrito a mano. Guarda copia de tus
+> libros antes de editarlos y comprueba el EPUB final antes de publicarlo.
+
 ![Editor con el árbol de archivos, el código del capítulo y la vista previa con capitular](docs/capturas/01-editor.png)
 
 Hecho con [Tauri 2](https://tauri.app), React, TypeScript y
