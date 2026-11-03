@@ -1,200 +1,215 @@
 # EPUB Editor
 
-Editor de EPUB enfocado en maquetar novelas: snippets de etiquetas con atajos,
-vista previa en vivo y **pegado inteligente desde PDF** (une líneas, arma palabras
-cortadas con guion, quita números de página y envuelve cada párrafo en `<p>`).
+Editor de EPUB 3 de escritorio pensado para **maquetar novelas**, en especial
+novelas ligeras traducidas al español. Trabaja directamente sobre el XHTML del
+libro, como Sigil, pero añade lo que hace falta para dejar una novela lista
+para publicar: estilos de novela, notas del traductor, ortografía en español,
+fuentes incrustadas y una revisión final antes de subir el libro a la tienda.
 
-El cuadro del pegado va enlazado en los dos sentidos: al mover el cursor por el
-texto de la izquierda se marca el párrafo que sale de ahí, y al pinchar un
-párrafo de la derecha vuelve a su origen.
+![Editor con el árbol de archivos, el código del capítulo y la vista previa con capitular](docs/capturas/01-editor.png)
 
-Además cubre el libro entero: metadatos y portada, índice generado desde los
-encabezados, partir un capítulo largo en varios, reordenar capítulos, buscar y
-reemplazar en todos los archivos a la vez, notas al pie numeradas solas y una
-revisión que señala lo que rompe el EPUB. Tiene tema claro y oscuro, y guarda un
-borrador por si se cierra el navegador.
+Hecho con [Tauri 2](https://tauri.app), React, TypeScript y
+[CodeMirror 6](https://codemirror.net). Toda la interfaz está en español.
 
-Stack: Tauri 2 + Vite + React + TypeScript, CodeMirror 6 y JSZip.
+## Qué hace
 
-## Correr en el navegador (sin Rust)
+### Escribir y editar
 
-```bash
-npm install
-npm run dev        # http://localhost:5173
-```
+- **Editor de XHTML** con resaltado, cierre de etiquetas, búsqueda y pestañas.
+  Al lado, la **vista previa** del capítulo, que navega entre capítulos.
+- **Snippets** con atajos de teclado para lo que se repite: párrafos, títulos,
+  ilustraciones, comillas y raya de diálogo. Los de notas se numeran solos: la
+  llamada coge el número siguiente, y el texto de la nota coge el de la primera
+  llamada que aún no tiene nota y enlaza de vuelta a su capítulo.
+- **Pegar desde PDF o Word**: limpia los cortes de línea, guiones y espacios
+  de un texto copiado y lo convierte en párrafos. También importa un `.docx`
+  entero.
+- **Buscar y reemplazar en todo el libro**, con expresiones regulares, la
+  opción de ignorar las etiquetas y búsquedas guardadas.
+- **Carácter bajo el cursor**: la barra de estado dice qué hay delante del
+  cursor y su código (`raya (U+2014)`, `semirraya (U+2013)`). Así se cazan los
+  espacios duros y guiones blandos que cuela un PDF. **Insertar carácter**
+  ofrece los que se usan al maquetar: — « » 「」 『』 ◇ y el espacio duro.
+- **Árbol por carpetas** (`Text`, `Styles`, `Images`, `Fonts`), con menú
+  contextual para duplicar, renombrar, eliminar, partir o usar una imagen
+  como portada. Puedes soltar imágenes, CSS o fuentes sobre la ventana para
+  añadirlos, o un `.epub` para abrirlo.
+- **Pestañas** con el historial de deshacer de cada archivo, **archivos
+  recientes** y recuento de palabras del capítulo y del libro.
+- **Paneles redimensionables**, tema claro y oscuro, y tipografías y colores
+  a tu gusto en las preferencias.
 
-En Edge y Chrome, "Guardar" escribe encima del `.epub` que abriste, como un
-editor de verdad: se pide permiso la primera vez y a partir de ahí Ctrl+S va
-directo al archivo. En Firefox y Safari, que no tienen esa API, cada guardado
-descarga una copia; la barra de estado dice en cuál de los dos casos estás.
+### Ortografía en español
 
-## Correr como app de escritorio (Tauri)
+![Palabra subrayada y menú con sugerencias](docs/capturas/02-ortografia.png)
 
-Una sola vez, instala Rust y las herramientas de compilación de C++ (Windows):
+- Subraya las palabras dudosas mientras escribes, con el diccionario español
+  de LibreOffice. Con clic derecho salen sugerencias, y puedes añadir la
+  palabra a tu diccionario (para todos tus libros) o solo al de este libro.
+- No marca los nombres de los personajes, que saca del propio libro, ni los
+  superlativos y diminutivos de palabras que existen («cansadísimo»,
+  «perrito»).
+- **Ortografía del libro** reúne todas las palabras dudosas, cuántas veces
+  sale cada una y dónde, y permite corregirlas en todo el libro de una vez.
 
-1. https://rustup.rs → `rustup-init.exe`
-2. Visual Studio Build Tools con "Desarrollo para el escritorio con C++"
-   (WebView2 ya viene con Windows 11).
+### Maquetar
 
-Después:
+![Estilos de novela: capitular, sangría, salto de escena y títulos](docs/capturas/03-estilos-de-novela.png)
 
-```bash
-npm run tauri dev      # app de escritorio con recarga en caliente
-npm run tauri build    # instalador en src-tauri/target/release/bundle
-```
+- **Estilos de novela**: tipografía, interlineado, sangría, texto
+  justificado con guiones, capitular de 2 a 4 líneas, ornamento del salto de
+  escena y estilo de los títulos, con vista previa. Los escribe en un bloque
+  aparte de la hoja de estilos, sin tocar lo que hayas escrito tú.
+- **Plantillas de maquetación**: guarda el aspecto de un libro y aplícalo al
+  siguiente de la serie.
+- **Fuentes incrustadas**: añades los archivos de la fuente y el editor lee su
+  familia, su grosor, si es cursiva y **qué permite su licencia**. Eliges qué
+  fuente va en el texto, en los títulos y en la capitular, y te avisa si a la
+  familia le falta la cursiva o la negrita.
+
+![Fuentes incrustadas con la licencia de cada archivo y una muestra](docs/capturas/04-fuentes.png)
+
+- **Pantallas de lectores**: la vista previa con el tamaño de un Kindle, un
+  Kobo, un Onyx Boox, un móvil o una tablet.
+
+![Vista previa con el tamaño de un móvil](docs/capturas/05-pantalla-movil.png)
+
+### Estructura del libro
+
+- **Reordenar capítulos arrastrándolos** en la lista de archivos; el índice
+  los sigue solo.
+- **Renombrar en serie** (`Cap01.xhtml`, `Cap02.xhtml`…) arreglando todos los
+  enlaces.
+- **Partir y fusionar capítulos**, duplicar y renombrar archivos.
+- **Índice**: lo regenera a partir de los títulos (`nav` y, si quieres,
+  `toc.ncx`). También puede añadir una **página de índice visible** que se
+  mantiene al día sola.
+- **Notas**: notas al pie con ida y vuelta, y paso de todas a una página de
+  notas al final del libro (y vuelta atrás).
+- **Preliminares y cortesía**: portadilla, créditos, dedicatoria y las páginas
+  de cortesía habituales.
+- **Metadatos y portada**: título, autor, serie, ISBN, materias y portada,
+  con los roles y propiedades que piden las tiendas.
+- **Optimizar imágenes**: reduce el tamaño de las ilustraciones pesadas.
+
+### Revisar antes de publicar
+
+![Antes de publicar: nueve revisiones en verde](docs/capturas/06-antes-de-publicar.png)
+
+- **Antes de publicar** junta todas las revisiones en un semáforo: metadatos,
+  portada, estructura, índice, enlaces, imágenes, fuentes, diálogo, nombres y
+  contenido. Cada punto abre el panel que lo arregla.
+- **Revisar las notas**: que cada llamada lleve a su nota y cada nota vuelva
+  a su llamada, con el mismo número. Avisa de vueltas que llevan a otra
+  llamada, notas a las que no llama nadie, y números saltados, repetidos o
+  fuera de orden, aunque el EPUB sea válido.
+- **Revisar el diálogo**: rayas mal puestas, incisos sin cerrar, comillas y
+  signos de apertura que faltan.
+- **Nombres del libro**: detecta las variantes de un mismo nombre
+  («Kazuto», «Kasuto»), que son fáciles de cometer y difíciles de ver.
+- **Enlaces y archivos sueltos**: enlaces rotos y archivos que nadie usa.
+- **Informe del libro**: palabras, tiempo de lectura por capítulo, frases
+  demasiado largas y palabras que se repiten.
+- **Limpiar documento**: comillas rectas a latinas, puntos suspensivos,
+  espacios dobles y párrafos vacíos.
+
+### Sin perder trabajo
+
+- **Guardado automático** del borrador: si la app se cierra, al abrirla
+  ofrece recuperarlo.
+- **Puntos de control**: instantáneas del libro para volver atrás y
+  comparar. Los cambios grandes crean uno solo y ofrecen «Deshacer».
+
+![El editor con el tema claro](docs/capturas/07-tema-claro.png)
 
 ## Atajos
 
 | Atajo | Acción |
 |---|---|
-| Ctrl+P | Envolver selección (o cada línea seleccionada) en `<p>` |
-| Ctrl+I / Ctrl+B | `<em>` / `<strong>` |
-| Ctrl+E | `<p class="centro">` |
-| Alt+1 / Alt+2 | `<h1>` / `<h2>` |
 | Ctrl+K | Todos los comandos |
 | Ctrl+P | Ir a un archivo por su nombre |
-| Ctrl+V | Pegado inteligente (en archivos XHTML, si está activado) |
-| Ctrl+Shift+V | Pegar sin limpiar |
-| Ctrl+Alt+N | Nota al pie con el siguiente número libre |
 | Ctrl+Shift+F | Buscar y reemplazar en todo el libro |
-| Ctrl+W | Cerrar la pestaña actual |
-| Ctrl+S / Ctrl+O | Guardar / Abrir |
+| Ctrl+I / Ctrl+B | `<em>` / `<strong>` |
+| Ctrl+E | Párrafo centrado |
+| Ctrl+Shift+P | Párrafo sin sangría |
+| Alt+1 / Alt+2 | `<h1>` / `<h2>` |
+| Ctrl+Shift+- | Raya de diálogo |
+| Ctrl+Shift+9 / Ctrl+Shift+0 | Comillas 「」 / 『』 |
+| Ctrl+Alt+N | Nota al pie con el siguiente número libre |
+| Ctrl+Shift+V | Pegar sin limpiar |
+| Ctrl+S / Ctrl+Shift+S / Ctrl+O | Guardar / Guardar como / Abrir |
+| Ctrl+W | Cerrar la pestaña |
+| Ctrl+, | Preferencias |
 
-Los snippets se editan desde el botón ⚙ (o en `src/snippets.json` para los de
-fábrica). El diálogo tiene dos modos:
+Los atajos de los snippets se cambian en **Insertar → Editar snippets…**,
+pulsando la combinación que quieras. En el texto de un snippet, `|` marca
+dónde queda el cursor.
 
-- **Ventana** — lista a la izquierda, formulario a la derecha: nombre, atajo
-  (se pulsa la combinación y queda grabada), envolver la selección o insertar un
-  bloque, y una vista previa de cómo queda. Avisa si dos comparten atajo.
-- **JSON** — el mismo contenido en crudo, para pegar o retocar a mano. Se pasa de
-  un modo al otro sin perder los cambios.
+## Instalar
 
-En el texto de un snippet, `|` marca dónde queda el cursor.
+Por ahora no hay instaladores publicados: hay que compilarlo.
 
-## La ventana
+### Requisitos
 
-Arriba hay una **barra de menús** (Archivo, Edición, Insertar, Libro, Vista) con
-todos los comandos y su atajo al lado. La barra de botones se quedó con lo que
-se toca a todas horas: Guardar, + Capítulo, Pegar desde PDF y Revisar.
+- [Node.js](https://nodejs.org) 22 o superior.
+- [Rust](https://www.rust-lang.org/tools/install), para la app de escritorio.
+- En Windows, WebView2 (viene con Windows 10 y 11) y las herramientas de
+  compilación de C++ de Visual Studio. El resto de sistemas, en los
+  [requisitos de Tauri](https://tauri.app/start/prerequisites/).
 
-## El libro, no solo el texto
+### Compilar
 
-- **Metadatos** — título, autor (con nombre para ordenar), saga y número, idioma,
-  editorial, fecha, ISBN, etiquetas y sinopsis. Se escriben como EPUB 3.
-- **Portada** — elige una imagen (botón ☆ en el árbol, o desde Metadatos) y se
-  encarga del resto: `cover-image`, el `<meta name="cover">` que aún piden
-  algunos lectores, el XHTML de portada y ponerlo primero.
-- **Índice** — lo rehace con los encabezados de los capítulos, anidando los `h2`
-  bajo su `h1`. Puede generar también `toc.ncx` para lectores antiguos.
-- **Orden de lectura** — las flechas ↑↓ del árbol mueven el capítulo en el spine.
-- **Buscar y reemplazar** — en todos los archivos, con regex opcional. Por
-  defecto **ignora lo que hay dentro de las etiquetas**: pasar `"` a `«` tocaría
-  si no cada `href` y cada `xmlns`, y dejaría el libro ilegible.
-- **Partir capítulo** — corta en cada encabezado o por donde esté el cursor. El
-  archivo original se queda con el primer trozo y los demás van detrás en el
-  orden de lectura, heredando la cabecera (hoja de estilos, envoltorio) y con su
-  `<title>` puesto. Es el paso siguiente a pegar un PDF entero.
-- **Limpiar documento** — comillas rectas a «latinas», guiones de diálogo a
-  rayas, espacios dobles, espacios duros colados del PDF y puntos suspensivos.
-  Con el recuento por regla y la vista previa de cada cambio antes de aplicarlo,
-  sobre un capítulo o sobre el libro entero. Como en buscar y reemplazar, no
-  toca lo que hay dentro de las etiquetas —ni la sangría del XHTML.
-- **Puntos de control** — copias del libro entero que puedes nombrar y
-  restaurar, con un botón para **comparar**: qué archivos cambiaron y cuántas
-  líneas entraron y salieron en cada uno.
+```bash
+git clone <url-del-repositorio>
+cd epub-editor
+npm install
+npm run tauri build
+```
 
-  Además se crea uno **solo, antes de cada operación masiva** (reemplazar todo,
-  limpiar el libro, partir un capítulo, regenerar el índice, optimizar
-  imágenes) y aparece un aviso con **Deshacer**. Hace falta porque el editor
-  solo mantiene historial del archivo abierto: sin esto, un reemplazo en
-  cuarenta capítulos no tendría vuelta atrás.
-- **Optimizar imágenes** — redimensionar y recomprimir en lote, con el antes y
-  el después de cada una y cuánto se ahorra en total antes de aplicar nada. Los
-  PNG y los GIF se quedan en PNG para no perder la transparencia.
-- **Insertar carácter** — un cuadro con lo que de verdad se usa maquetando
-  (— «» 「」 ◇ espacio duro…), cada uno con su nombre y su código.
-- **Revisar** — XHTML mal formado, ids repetidos (lo que descoloca las notas al
-  pie), enlaces e imágenes que no existen, fragmentos `#id` que no llevan a
-  ninguna parte, archivos fuera del manifest y metadatos obligatorios que faltan.
-  Al hacer clic en un problema salta al archivo y la línea.
+El ejecutable queda en `src-tauri/target/release/`, y los instaladores (NSIS
+y MSI en Windows) en `src-tauri/target/release/bundle/`.
 
-## Comodidades
+## Desarrollo
 
-- **Archivos recientes** — en el menú Archivo, los últimos ocho libros. No es
-  una lista de nombres: en Edge y Chrome se guarda el asidero del archivo, así
-  que al pulsarlo se reabre de verdad (pidiendo permiso otra vez, porque caduca
-  al cerrar el navegador) y Guardar vuelve a escribir en él. Solo se recuerda
-  lo que se puede reabrir.
-- **Clic derecho en el árbol** — menú contextual con duplicar, renombrar,
-  eliminar, mover en el orden de lectura, partir el capítulo o usar la imagen
-  como portada. La copia se llama `Cap01-copia.xhtml` y entra en el orden de
-  lectura justo detrás del original.
-- **Árbol por carpetas reales** — `Text`, `Styles`, `Images`, `Fonts`… tal y
-  como están dentro del EPUB, plegables. La carpeta del OPF no se muestra: casi
-  todo cuelga de ella y ese nivel de más no aporta nada.
-- **Pestañas de archivos abiertos** — varios archivos a la vez, con el historial
-  de deshacer de cada uno intacto al saltar entre ellos. Botón central o Ctrl+W
-  para cerrar.
-- **Carácter bajo el cursor** — la barra de estado dice qué hay delante del
-  cursor con su nombre y código: `raya (U+2014)`, `semirraya (U+2013)`,
-  `guion (U+002D)`. Lo que no se ve —espacios duros, guiones blandos, espacios
-  de ancho cero— sale marcado. Es la forma de cazar lo que un PDF cuela.
-- **Índice navegable** — en pestaña junto a la vista previa, con su jerarquía;
-  al hacer clic salta al capítulo.
-- **Soltar archivos** — arrastra imágenes, CSS o fuentes sobre la ventana para
-  añadirlos; un `.epub` suelto abre el libro.
-- **Zoom de la vista previa** — del 60 % al 200 %.
-- **Vista previa en claro u oscuro** — el botón ☀/☽ del panel la cambia. Sigue
-  al tema de la app hasta que elijas uno a mano. No toca el EPUB: solo cómo se
-  ve aquí. Si un libro fija sus propios colores de texto puede que no cambien;
-  entonces vuelve al claro, que es como lo verá el lector.
-- **Preferencias** (Ctrl+,) — cuatro pestañas:
-  - *Tipografía*: fuente del editor, de la interfaz y con serifa, con pilas
-    habituales o la que escribas, más tamaño e interlineado.
-  - *Interfaz*: fondo, paneles, texto, bordes y acento.
-  - *Sintaxis*: los diez colores del resaltado, con una muestra en vivo.
-  - *JSON*: cualquier variable, no solo las de las otras pestañas
-    (`--sunken`, `--danger`, `--r-md`…).
+| Qué | Comando |
+|---|---|
+| App de escritorio en desarrollo | `npm run tauri dev` |
+| Solo la interfaz, en el navegador | `npm run dev` → http://localhost:5173 |
+| Comprobar tipos | `npx tsc -b` |
+| Pruebas (Vitest) | `npm test` |
+| Lint | `npm run lint` |
+| Prueba de humo en un navegador real | `npm run prueba:navegador` |
 
-  Todo el aspecto son variables CSS, así que un tema propio es sobrescribirlas.
-  Los colores se guardan por separado en claro y en oscuro; las tipografías
-  valen para los dos.
-- **Tema claro y oscuro** — el botón de la esquina los alterna y recuerda la
-  elección; sin elección previa manda el sistema. El editor cambia con la app,
-  cada uno con su propia paleta de sintaxis: etiquetas, atributos, valores,
-  selectores y propiedades se distinguen igual en los dos.
-- **Borrador automático** — cada pocos segundos se guarda el libro entero en
-  IndexedDB. Si se cierra el navegador, al volver ofrece recuperarlo. Se borra
-  al guardar el `.epub` de verdad.
-- **Ancho de la hoja** — la vista previa se ve sobre una hoja centrada, con tres
-  anchos, para comprobar el largo de línea como se leerá.
-- **Conteo de palabras** — del capítulo abierto y del libro entero, en la barra
-  de estado.
+En el navegador la app funciona igual; cambia cómo se guarda. En Edge y
+Chrome, «Guardar» escribe encima del `.epub` que abriste: pide permiso la
+primera vez y después Ctrl+S va directo al archivo. Firefox y Safari no tienen
+esa API, así que cada guardado descarga una copia. La barra de estado indica
+en cuál de los dos casos estás.
 
-## Estructura
+### Cómo está organizado
 
-- `src/lib/pdfPaste.ts` — heurística de pegado desde PDF (con tests: `npm test`)
-- `src/lib/epub.ts` — abrir/guardar EPUB, manifest, spine, rutas
-- `src/lib/preview.ts` — vista previa con imágenes/CSS/fuentes del libro
-- `src/lib/metadata.ts` — metadatos del OPF y portada
-- `src/lib/structure.ts` — spine, índice desde encabezados y `toc.ncx`
-- `src/lib/validate.ts` — revisión del libro
-- `src/lib/searchBook.ts` — buscar y reemplazar en todos los archivos
-- `src/lib/footnotes.ts` — notas al pie numeradas
-- `src/lib/split.ts` — partir un capítulo en varios archivos
-- `src/lib/autosave.ts` — borrador en IndexedDB
-- `src/lib/theme.ts`, `src/lib/editorTheme.ts` — tema claro y oscuro
-- `src/lib/settings.ts` — preferencias: tipografías y temas propios
-- `src/lib/words.ts` — conteo de palabras
-- `src/lib/charName.ts` — nombre del carácter bajo el cursor
-- `src/lib/files.ts` — duplicar un archivo
-- `src/lib/recents.ts` — archivos recientes
-- `src/lib/diff.ts` — comparar con un punto de control
-- `src/lib/images.ts` — optimizar imágenes
-- `src/lib/tidy.ts` — limpieza tipográfica
-- `src/lib/checkpoints.ts` — puntos de control
-- `src/lib/db.ts` — IndexedDB compartido
-- `src/lib/opfDom.ts` — leer y escribir el OPF como DOM
-- `src/lib/snippets.ts` — snippets y atajos
-- `src/lib/fileIO.ts` — diálogos nativos en Tauri, input/descarga en navegador
-- `src-tauri/` — app de escritorio (plugins dialog y fs)
+```
+src/
+  lib/          la lógica del libro, sin React, cada módulo con sus pruebas
+  components/   diálogos y paneles
+  App.tsx       el estado del libro y la unión de todo
+  dict/es/      diccionario español (Hunspell)
+scripts/
+  navegador/    arnés para probar la app en Edge con clics y teclas reales
+src-tauri/      la parte de escritorio (Rust)
+```
+
+El libro se abre en memoria con [JSZip](https://stuk.github.io/jszip/) y se
+modifica con expresiones regulares sobre el texto, no reserializando el
+XHTML: así se conservan la sangría, las comillas y el formato del original.
+Lo que añade el editor (estilos de novela, fuentes, la página de índice) va
+marcado, para no tocar nunca lo que escribiste a mano.
+
+Las convenciones para contribuir están en [CLAUDE.md](CLAUDE.md).
+
+## Licencias
+
+El diccionario español es el de LibreOffice (RLA-ES), con triple licencia
+GPL-3.0, LGPL-3.0 o MPL-1.1; el texto completo está en
+[src/dict/es/LICENSE](src/dict/es/LICENSE). El proyecto en sí todavía no tiene
+licencia publicada.

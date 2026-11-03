@@ -5,11 +5,23 @@ import { EditorSelection } from '@codemirror/state'
 import type { EditorView, KeyBinding } from '@codemirror/view'
 import defaults from '../snippets.json'
 
+/**
+ * Cómo se rellena una variable `{NOMBRE}` del snippet:
+ * - `noteChapter`: el capítulo donde está la llamada de la nota que se escribe.
+ * - `lastChapter`: el último capítulo del orden de lectura.
+ * - `current`: el archivo que se está editando.
+ * - `ask`: preguntar cada vez, con la lista de archivos del libro.
+ * - `{ text }`: siempre el mismo texto.
+ */
+export type VarRule = 'noteChapter' | 'lastChapter' | 'current' | 'ask' | { text: string }
+
 export interface Snippet {
   name: string
   key?: string
   wrap?: [string, string]
   insert?: string
+  /** Reglas de las variables del texto. Una variable sin regla se pregunta. */
+  vars?: Record<string, VarRule>
 }
 
 const STORAGE_KEY = 'epub-editor.snippets'
@@ -151,8 +163,23 @@ export function wrapLines(view: EditorView, sn: Snippet): boolean {
   return true
 }
 
-export function snippetKeymap(list: Snippet[]): KeyBinding[] {
+/**
+ * `prepare` se llama al pulsar el atajo, no al crearlo: así un snippet que se
+ * numera solo (ver snippetNumbers.ts) usa el número que toca en ese momento.
+ */
+export function snippetKeymap(
+  list: Snippet[],
+  prepare: (s: Snippet) => Snippet | null = s => s,
+): KeyBinding[] {
   return list
     .filter(s => s.key)
-    .map(s => ({ key: s.key!, preventDefault: true, run: (v: EditorView) => wrapLines(v, s) }))
+    .map(s => ({
+      key: s.key!,
+      preventDefault: true,
+      run: (v: EditorView) => {
+        // null: hay que preguntar algo antes (un archivo); lo inserta quien pregunta.
+        const ready = prepare(s)
+        return ready ? wrapLines(v, ready) : true
+      },
+    }))
 }

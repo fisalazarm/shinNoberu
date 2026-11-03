@@ -10,6 +10,7 @@ import { snippetKeymap, type Snippet } from '../lib/snippets'
 import { pdfToParagraphs, type PdfPasteOptions } from '../lib/pdfPaste'
 import { insertFootnote } from '../lib/footnotes'
 import { editorTheme } from '../lib/editorTheme'
+import { misspelledAt, spellcheck, spellRefresh } from '../lib/spellExtension'
 import type { Theme } from '../lib/theme'
 
 /** Dónde está el cursor, para la barra de estado. */
@@ -18,6 +19,15 @@ export interface CursorInfo {
   col: number
   /** Carácter a la derecha del cursor, vacío al final de la línea. */
   char: string
+}
+
+/** Clic derecho sobre una palabra subrayada. */
+export interface SpellMenuRequest {
+  x: number
+  y: number
+  from: number
+  to: number
+  word: string
 }
 
 /** Salto pedido desde fuera (resultado de búsqueda, problema del validador). */
@@ -33,10 +43,20 @@ interface Props {
   path: string
   doc: string
   snippets: Snippet[]
+  /**
+   * Rellena los huecos de un snippet (número de nota, variables) justo antes de
+   * usarlo. null: hay que preguntar algo antes, y lo insertará quien pregunte.
+   */
+  prepareSnippet?: (s: Snippet) => Snippet | null
   smartPaste: boolean
   pasteOptions: PdfPasteOptions
   theme: Theme
   goto?: Goto
+  /** Subrayar la ortografía (solo en XHTML). */
+  spellOn: boolean
+  /** Palabras que no se subrayan aunque el diccionario no las conozca. */
+  spellAccepted: ReadonlySet<string>
+  onSpellMenu: (m: SpellMenuRequest) => void
   onChange: (path: string, text: string) => void
   onCursor: (c: CursorInfo) => void
   onReady: (view: EditorView) => void
@@ -86,10 +106,16 @@ export default function Editor(props: Props) {
   const langConf = useRef(new Compartment())
   const keysConf = useRef(new Compartment())
   const themeConf = useRef(new Compartment())
+  const spellConf = useRef(new Compartment())
+
+  const makeSpell = (path: string): Extension =>
+    latest.current.spellOn && /\.x?html?$/i.test(path)
+      ? spellcheck(() => latest.current.spellAccepted)
+      : []
 
   const makeKeys = () =>
     keymap.of([
-      ...snippetKeymap(latest.current.snippets),
+      ...snippetKeymap(latest.current.snippets, s => (latest.current.prepareSnippet ? latest.current.prepareSnippet(s) : s)),
       {
         key: 'Mod-Shift-v', // pegar sin limpiar
         run: () => { rawNextPaste.current = true; return false },
@@ -106,12 +132,21 @@ export default function Editor(props: Props) {
         basicSetup,
         langConf.current.of(languageFor(path)),
         themeConf.current.of(editorTheme(latest.current.theme)),
+        spellConf.current.of(makeSpell(path)),
         EditorView.lineWrapping,
         EditorView.updateListener.of(u => {
           if (u.docChanged) latest.current.onChange(currentPath.current, u.state.doc.toString())
           if (u.docChanged || u.selectionSet) report(u.state)
         }),
         EditorView.domEventHandlers({
+          contextmenu(event, v) {
+            const pos = v.posAtCoords({ x: event.clientX, y: event.clientY })
+            const hit = pos == null ? null : misspelledAt(v, pos)
+            if (!hit) return false
+            event.preventDefault()
+            latest.current.onSpellMenu({ x: event.clientX, y: event.clientY, ...hit })
+            return true
+          },
           paste(event, v) {
             const raw = rawNextPaste.current
             rawNextPaste.current = false
@@ -161,6 +196,7 @@ export default function Editor(props: Props) {
       effects: [
         keysConf.current.reconfigure(makeKeys()),
         themeConf.current.reconfigure(editorTheme(props.theme)),
+        spellConf.current.reconfigure(makeSpell(props.path)),
       ],
     })
     report(v.state)
@@ -179,6 +215,16 @@ export default function Editor(props: Props) {
   useEffect(() => {
     view.current?.dispatch({ effects: keysConf.current.reconfigure(makeKeys()) })
   }, [props.snippets])
+
+  // Encender o apagar la ortografía.
+  useEffect(() => {
+    view.current?.dispatch({ effects: spellConf.current.reconfigure(makeSpell(currentPath.current)) })
+  }, [props.spellOn])
+
+  // Se añadió una palabra al diccionario: volver a mirar.
+  useEffect(() => {
+    view.current?.dispatch({ effects: spellRefresh.of(null) })
+  }, [props.spellAccepted])
 
   // Cambio de tema claro/oscuro sin perder el documento ni el historial.
   useEffect(() => {

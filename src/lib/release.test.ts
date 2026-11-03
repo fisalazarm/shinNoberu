@@ -188,6 +188,20 @@ describe('los bloques', () => {
     expect(bloque(b, 'contenido').advice).toContain('vacío')
   })
 
+  it('una página que solo lleva una ilustración no cuenta como vacía', () => {
+    const b = book()
+    b.files.set('OEBPS/Text/Lamina.xhtml', {
+      path: 'OEBPS/Text/Lamina.xhtml',
+      mediaType: 'application/xhtml+xml',
+      text: '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Lámina</title></head><body><figure class="dimg"><img src="../Images/l1.jpg" alt=""/></figure></body></html>',
+    })
+    const opf = b.files.get('OEBPS/content.opf')!
+    opf.text = opf.text!
+      .replace('</manifest>', '  <item id="l1" href="Text/Lamina.xhtml" media-type="application/xhtml+xml"/>\n  </manifest>')
+      .replace('</spine>', '<itemref idref="l1"/></spine>')
+    expect(bloque(b, 'contenido').advice).toBeUndefined()
+  })
+
   it('cada bloque sabe qué panel abre', () => {
     for (const b of reviewRelease(book()).blocks) expect(b.opens).toBeTruthy()
   })

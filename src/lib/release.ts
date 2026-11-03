@@ -13,6 +13,8 @@ import { isTextFile, parseManifest, type EpubBook } from './epub'
 import { reviewDialogue, fixable } from './dialogue'
 import { findBrokenLinks, findOrphans, prettyBytes, totalBytes } from './housekeeping'
 import { coverImagePath, readMetadata } from './metadata'
+import { embeddingSync, isFontPath, missingStyles, readFontSetup } from './fonts'
+import { checkNotes, NOTE_LABELS } from './noteCheck'
 import { findNames, inconsistent } from './names'
 import { bookReport } from './report'
 import { navItemPath, readToc } from './structure'
@@ -22,7 +24,8 @@ import { isStale, tocLines, visibleTocPath } from './visibleToc'
 export type Level = 'ok' | 'warn' | 'error'
 
 /** Qué panel abre cada bloque; la app lo traduce a su diálogo. */
-export type Opens = 'problems' | 'cleanup' | 'dialogue' | 'names' | 'images' | 'metadata' | 'toc' | 'report'
+export type Opens =
+  | 'problems' | 'cleanup' | 'dialogue' | 'names' | 'images' | 'metadata' | 'toc' | 'report' | 'fonts' | 'notes'
 
 export interface Block {
   id: string
@@ -269,7 +272,10 @@ function sizeBlock(book: EpubBook): { bytes: number; words: number; block: Block
     bytes += f.bytes?.byteLength ?? (f.text ? new Blob([f.text]).size : 0)
   }
   const { words, chapters } = bookReport(book)
-  const vacios = chapters.filter(c => c.words === 0).length
+  // Una página que solo lleva una imagen (la portada, una lámina de
+  // ilustración) no está vacía, aunque no tenga palabras.
+  const conImagen = (path: string) => /<(img|image|svg)\b/i.test(book.files.get(path)?.text ?? '')
+  const vacios = chapters.filter(c => c.words === 0 && !conImagen(c.path)).length
   return {
     bytes,
     words,
@@ -281,6 +287,72 @@ function sizeBlock(book: EpubBook): { bytes: number; words: number; block: Block
       advice: vacios ? `${vacios} capítulo${vacios === 1 ? ' está vacío' : 's están vacíos'}.` : undefined,
       opens: 'report',
     },
+  }
+}
+
+/**
+ * Las notas: una llamada que no lleva a nada es un enlace roto; una vuelta
+ * que lleva a otra llamada o un número saltado son válidos, pero se notan.
+ */
+function notesBlock(book: EpubBook): Block | null {
+  const r = checkNotes(book)
+  if (!r.calls) return null
+  const rotas = r.issues.filter(i => i.severity === 'error').length
+  if (!r.issues.length) {
+    return { id: 'notas', label: 'Notas', level: 'ok', summary: `${r.notes} nota${r.notes === 1 ? '' : 's'}, cada una con su llamada y su número.`, opens: 'notes' }
+  }
+  // Lo que más pesa primero, en palabras de la lista.
+  const tipos = [...new Set(r.issues.map(i => NOTE_LABELS[i.code].toLowerCase()))]
+  return {
+    id: 'notas',
+    label: 'Notas',
+    level: rotas ? 'error' : 'warn',
+    summary: `${r.issues.length} aviso${r.issues.length === 1 ? '' : 's'} en ${r.notes} nota${r.notes === 1 ? '' : 's'}: ${tipos.slice(0, 2).join('; ')}${tipos.length > 2 ? '…' : ''}.`,
+    advice: rotas
+      ? 'Hay llamadas o vueltas que no llevan a ninguna parte.'
+      : r.issues.some(i => i.code === 'vuelta-equivocada' || i.code === 'numero-distinto' || i.code === 'repetida')
+        ? 'El libro es válido, pero quien lea saltará a la nota equivocada.'
+        : 'El libro es válido, pero la numeración o las notas sueltas se notarán al leer.',
+    opens: 'notes',
+  }
+}
+
+/**
+ * Las fuentes del libro: una con licencia que no deja incrustarla es motivo
+ * de reclamación; una familia de texto sin cursiva se ve imitada.
+ */
+function fontsBlock(book: EpubBook): Block | null {
+  const files = [...book.files.values()].filter(f => isFontPath(f.path))
+  if (!files.length) return null
+  const restricted = files.filter(f => f.bytes && embeddingSync(f.bytes) === 'restricted')
+  if (restricted.length) {
+    return {
+      id: 'fuentes',
+      label: 'Fuentes',
+      level: 'error',
+      summary: `La licencia de ${restricted.map(f => f.path.split('/').pop()).join(', ')} no permite incrustarla.`,
+      advice: 'Cámbiala por otra o consigue una licencia que cubra ebooks.',
+      opens: 'fonts',
+    }
+  }
+  const setup = readFontSetup(book)
+  const body = setup.roles.body
+  const missing = body ? missingStyles([...setup.faces, ...setup.external], body) : []
+  if (missing.length) {
+    return {
+      id: 'fuentes',
+      label: 'Fuentes',
+      level: 'warn',
+      summary: `A «${body}», la fuente del texto, le falta ${missing.join(', ')}.`,
+      advice: 'El lector la imitará deformando la normal. Añade esos archivos si la familia los tiene.',
+      opens: 'fonts',
+    }
+  }
+  return {
+    id: 'fuentes',
+    label: 'Fuentes',
+    level: 'ok',
+    summary: `${files.length} archivo${files.length === 1 ? '' : 's'} de fuente${body ? `; el texto va en «${body}»` : ''}.`,
   }
 }
 
@@ -311,6 +383,8 @@ export function reviewRelease(book: EpubBook): Release {
     tocBlock(book),
     linksBlock(book),
     imagesBlock(book),
+    notesBlock(book),
+    fontsBlock(book),
     dialogueBlock(book),
     namesBlock(book),
     size.block,

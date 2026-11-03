@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import Modal from './Modal'
 import Icon from './Icon'
-import { keyFromEvent, prettyKey, snippetPreview, type Snippet } from '../lib/snippets'
+import { keyFromEvent, prettyKey, snippetPreview, type Snippet, type VarRule } from '../lib/snippets'
+import { snippetVars, VAR_RULES } from '../lib/snippetFill'
 
 interface Props {
   snippets: Snippet[]
@@ -31,6 +32,11 @@ export default function SnippetsDialog(props: Props) {
 
   const patch = (changes: Partial<Snippet>) =>
     setList(l => l.map((s, i) => (i === sel ? { ...s, ...changes } : s)))
+
+  const setRule = (name: string, rule: VarRule) =>
+    patch({ vars: { ...current.vars, [name]: rule } })
+
+  const vars = current ? snippetVars(current) : []
 
   const move = (delta: number) => {
     const to = sel + delta
@@ -95,7 +101,14 @@ export default function SnippetsDialog(props: Props) {
             Cada snippet tiene <code>name</code>, opcionalmente <code>key</code> (p. ej.{' '}
             <code>Mod-Shift-q</code>; Mod = Ctrl), y <code>wrap: ["&lt;abre&gt;", "&lt;/cierra&gt;"]</code>{' '}
             para envolver la selección o <code>insert</code> para insertar un bloque.{' '}
-            <code>|</code> marca dónde queda el cursor.
+            <code>|</code> marca dónde queda el cursor.{' '}
+            <code>{'{}'}</code> se cambia por el número de la siguiente nota del libro: con dos
+            cifras dentro de <code>&lt;sup&gt;</code> (03) y solo fuera (3). <code>{'{n}'}</code> es
+            siempre el número solo y <code>{'{nn}'}</code> siempre con dos cifras. Una palabra en
+            mayúsculas entre llaves, como <code>{'{CAPNOTA}'}</code>, es una variable; su regla va en{' '}
+            <code>{'"vars": { "CAPNOTA": "noteChapter" }'}</code>, con <code>noteChapter</code>,{' '}
+            <code>lastChapter</code>, <code>current</code>, <code>ask</code> o{' '}
+            <code>{'{ "text": "…" }'}</code>.
           </p>
           <textarea className="code" value={text} onChange={e => setText(e.target.value)} spellCheck={false} />
         </>
@@ -203,6 +216,48 @@ export default function SnippetsDialog(props: Props) {
                     spellCheck={false}
                   />
                 </label>
+              )}
+
+              {vars.length > 0 && (
+                <div className="field">
+                  <span className="lbl">
+                    Variables
+                    <span className="hint">qué va en cada palabra en mayúsculas entre llaves</span>
+                  </span>
+                  <div className="snip-vars">
+                    {vars.map(name => {
+                      const rule = current.vars?.[name] ?? 'ask'
+                      const fixed = typeof rule === 'object'
+                      return (
+                        <div key={name} className="snip-var">
+                          <code>{`{${name}}`}</code>
+                          <select
+                            aria-label={`Regla de ${name}`}
+                            value={fixed ? 'text' : rule}
+                            onChange={e => setRule(name, e.target.value === 'text'
+                              ? { text: '' }
+                              : (e.target.value as VarRule))}
+                          >
+                            {VAR_RULES.map(r => <option key={r.rule} value={r.rule}>{r.label}</option>)}
+                            <option value="text">Texto fijo</option>
+                          </select>
+                          {fixed && (
+                            <input
+                              value={rule.text}
+                              placeholder="Lo que va siempre"
+                              onChange={e => setRule(name, { text: e.target.value })}
+                            />
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p className="hint">
+                    «Capítulo de la nota» busca la primera llamada que todavía no tiene su nota y
+                    pone su capítulo; si no hay ninguna, te pregunta. «Elegir de la lista» te enseña
+                    los archivos del libro cada vez.
+                  </p>
+                </div>
               )}
 
               <div className="field">

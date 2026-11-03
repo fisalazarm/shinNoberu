@@ -13,6 +13,17 @@ import MetadataDialog from './components/MetadataDialog'
 import ProblemsDialog from './components/ProblemsDialog'
 import SearchDialog from './components/SearchDialog'
 import TocDialog from './components/TocDialog'
+import SeriesDialog from './components/SeriesDialog'
+import FontsDialog from './components/FontsDialog'
+import NotesDialog from './components/NotesDialog'
+import SpellDialog from './components/SpellDialog'
+import ContextMenu, { type ContextTarget } from './components/ContextMenu'
+import type { SpellMenuRequest } from './components/Editor'
+import { findNames } from './lib/names'
+import { matchCase, replaceWord } from './lib/spell'
+import { suggestions } from './lib/spellClient'
+import { loadBookWords, loadPersonal, saveBookWords, savePersonal } from './lib/userDict'
+import { applyFonts, fontFolder, type FontChanges } from './lib/fonts'
 import SplitDialog from './components/SplitDialog'
 import RecoverDialog from './components/RecoverDialog'
 import MenuBar, { type MenuDef } from './components/MenuBar'
@@ -35,7 +46,7 @@ import QuickOpen, { type QuickItem } from './components/QuickOpen'
 import UndoBar, { type UndoOffer } from './components/UndoBar'
 import {
   addToOpf, dirname, guessMediaType, isTextFile, loadEpub, parseManifest, relativePath,
-  removeFromOpf, resolvePath, saveEpub, spinePaths, type EpubBook,
+  removeFromOpf, saveEpub, spinePaths, type EpubBook,
 } from './lib/epub'
 import { newEpub, xhtmlTemplate } from './lib/newEpub'
 import {
@@ -53,7 +64,7 @@ import {
   clearCover, coverImagePath, readMetadata, setCover, touchModified, writeMetadata,
   type Metadata,
 } from './lib/metadata'
-import { moveSpineItem, readToc, regenerateToc } from './lib/structure'
+import { followSpineInToc, moveSpineBefore, moveSpineItem, readToc, regenerateToc } from './lib/structure'
 import { countBySeverity, validateBook, type Problem } from './lib/validate'
 import {
   defaultSearchOptions, replaceAllInBook, replaceMatch, type Match, type SearchOptions,
@@ -69,6 +80,10 @@ import { DEVICES, deviceById } from './lib/devices'
 import type { Opens } from './lib/release'
 import { createVisibleToc, refreshVisibleToc, removeVisibleToc, visibleTocPath } from './lib/visibleToc'
 import { countFootnotes, notesPagePath, toEndnotes, toFootnotes } from './lib/endnotes'
+import { fitPanes, gridColumns, loadPaneSizes, savePaneSizes } from './lib/panes'
+import { fillSnippet, type Ask, type FillResult } from './lib/snippetFill'
+import { titleOf } from './lib/report'
+import Splitter from './components/Splitter'
 import {
   applyTemplate, defaultTemplate, importTemplates, type ApplyOptions, type LayoutTemplate,
 } from './lib/layoutTemplate'
@@ -78,7 +93,7 @@ import {
 } from './lib/checkpoints'
 import type { Optimized } from './lib/images'
 import { splitChapter, type SplitAt } from './lib/split'
-import { duplicateFile } from './lib/files'
+import { duplicateFile, renameFile, renameSeries, type Rename } from './lib/files'
 import { mergeChapters } from './lib/merge'
 import { beautify } from './lib/beautify'
 import { applyTheme, loadTheme, type Theme } from './lib/theme'
@@ -97,6 +112,7 @@ type Dialog =
   | { kind: 'problems' }
   | { kind: 'search' }
   | { kind: 'toc' }
+  | { kind: 'series' }
   | { kind: 'split'; cursor: number }
   | { kind: 'checkpoints' }
   | { kind: 'tidy' }
@@ -105,13 +121,17 @@ type Dialog =
   | { kind: 'compare'; meta: CheckpointMeta }
   | { kind: 'images' }
   | { kind: 'novelStyle' }
+  | { kind: 'fonts' }
+  | { kind: 'spell' }
   | { kind: 'cleanup' }
   | { kind: 'names' }
   | { kind: 'report' }
   | { kind: 'frontMatter' }
   | { kind: 'docx'; doc: DocxDoc; fileName: string }
   | { kind: 'dialogue' }
+  | { kind: 'notes' }
   | { kind: 'release' }
+  | { kind: 'pickVar'; ask: Ask }
   | { kind: 'templates' }
   | { kind: 'files' }
   | { kind: 'commands' }
@@ -120,6 +140,7 @@ type Dialog =
 
 const PASTE_KEY = 'epub-editor.paste'
 const SHEET_KEY = 'epub-editor.sheet'
+const SPELL_KEY = 'epub-editor.ortografia'
 const PREVIEW_THEME_KEY = 'epub-editor.previewTheme'
 const AUTOSAVE_MS = 3000
 const ADD_ACCEPT = '.jpg,.jpeg,.png,.gif,.webp,.svg,.css,.ttf,.otf,.woff,.woff2,.xhtml,.html'
@@ -189,6 +210,13 @@ export default function App() {
   const [dialog, setDialog] = useState<Dialog>(null)
   const [snippets, setSnippets] = useState<Snippet[]>(loadSnippets)
   const [smartPaste, setSmartPaste] = useState(true)
+  const [spellOn, setSpellOn] = useState(() => {
+    try { return localStorage.getItem(SPELL_KEY) !== 'no' } catch { return true }
+  })
+  const [personalWords, setPersonalWords] = useState(loadPersonal)
+  const [bookWordSet, setBookWordSet] = useState<Set<string>>(new Set())
+  const [nameWords, setNameWords] = useState<Set<string>>(new Set())
+  const [spellMenu, setSpellMenu] = useState<ContextTarget | null>(null)
   const [pasteOptions, setPasteOptions] = useState<PdfPasteOptions>(loadPasteOptions)
   const [previewHtml, setPreviewHtml] = useState('')
   const [problems, setProblems] = useState<Problem[]>([])
@@ -197,6 +225,11 @@ export default function App() {
   const [theme, setTheme] = useState<Theme>(loadTheme)
   const [sheet, setSheet] = useState<SheetId>(loadSheet)
   const [zoom, setZoom] = useState(1)
+  /** Ancho de la lista de archivos y de la vista previa, arrastrando sus bordes. */
+  const [panes, setPanes] = useState(loadPaneSizes)
+  const [viewport, setViewport] = useState(() => window.innerWidth)
+  const sidebarRef = useRef<HTMLElement>(null)
+  const previewRef = useRef<HTMLElement>(null)
   /** Sube al importar plantillas: obliga al diálogo a releer la lista. */
   const [templatesRev, setTemplatesRev] = useState(0)
   /** Pantalla de lector elegida, o vacío para ver la hoja suelta. */
@@ -280,6 +313,19 @@ export default function App() {
     return () => clearTimeout(t)
   }, [book, previewPath, rev, resolver, zoom, paper])
 
+  useEffect(() => {
+    const onResize = () => setViewport(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  // Se guarda un momento después del último cambio: arrastrar produce decenas
+  // por segundo y basta con quedarse con el último.
+  useEffect(() => {
+    const t = setTimeout(() => savePaneSizes(panes), 300)
+    return () => clearTimeout(t)
+  }, [panes])
+
   // La página de índice visible se rehace sola cuando cambian los capítulos.
   // Solo con cambios del usuario: abrir un libro no debe marcarlo como
   // modificado sin haber tocado nada.
@@ -292,6 +338,35 @@ export default function App() {
   useEffect(() => {
     try { localStorage.setItem(PASTE_KEY, JSON.stringify(pasteOptions)) } catch { /* ignorar */ }
   }, [pasteOptions])
+
+  // ---------- ortografía ----------
+
+  useEffect(() => {
+    try { localStorage.setItem(SPELL_KEY, spellOn ? 'si' : 'no') } catch { /* ignorar */ }
+  }, [spellOn])
+
+  // Las palabras aceptadas de este libro van por su identificador.
+  useEffect(() => { setBookWordSet(loadBookWords(book)) }, [book])
+
+  // Los nombres propios del libro no se subrayan. Se recalculan con calma
+  // tras escribir, y solo se cambia la lista si de verdad cambió: si no, el
+  // editor volvería a revisar en cada pausa.
+  useEffect(() => {
+    if (!spellOn) return
+    const t = setTimeout(() => {
+      const names = findNames(book).flatMap(g => g.variants.map(v => v.word))
+      setNameWords(prev => {
+        if (prev.size === names.length && names.every(n => prev.has(n))) return prev
+        return new Set(names)
+      })
+    }, rev === 0 ? 0 : 1500)
+    return () => clearTimeout(t)
+  }, [book, rev, spellOn])
+
+  const spellAccepted = useMemo(
+    () => new Set([...personalWords, ...bookWordSet, ...nameWords]),
+    [personalWords, bookWordSet, nameWords],
+  )
 
   useEffect(() => {
     document.title = `${dirty ? '● ' : ''}${fileName} — EPUB Editor`
@@ -552,19 +627,7 @@ export default function App() {
         const newPath = `${dirname(oldPath)}/${value}`
         if (newPath === oldPath) return setDialog(null)
         if (book.files.has(newPath)) return alert('Ya existe un archivo con ese nombre.')
-        // Actualiza las referencias (href/src/url) en todos los archivos de texto.
-        for (const f of book.files.values()) {
-          if (f.text == null || f.path === oldPath) continue
-          f.text = f.text.replace(/(href|src|xlink:href)="([^"#]+)(#[^"]*)?"|url\((['"]?)([^'")]+)\4\)/g, (m, attr, href, frag, q, cssHref) => {
-            const h = href ?? cssHref
-            if (!h || /^[a-z]+:/i.test(h) || resolvePath(f.path, h) !== oldPath) return m
-            const rel = relativePath(f.path, newPath)
-            return attr ? `${attr}="${rel}${frag ?? ''}"` : `url(${q}${rel}${q})`
-          })
-        }
-        const f = book.files.get(oldPath)!
-        book.files.delete(oldPath)
-        book.files.set(newPath, { ...f, path: newPath })
+        if (!renameFile(book, oldPath, newPath)) return alert('No se pudo renombrar ese archivo.')
         resolver.invalidate(oldPath)
         setOpenPaths(list => list.map(p => (p === oldPath ? newPath : p)))
         if (active === oldPath) setActive(newPath)
@@ -583,9 +646,32 @@ export default function App() {
     v.focus()
   }
 
+  /**
+   * Sigue con un snippet a medio rellenar: si ya está, se inserta; si queda una
+   * variable por elegir, se abre la lista de archivos para ella.
+   */
+  const continueSnippet = (r: FillResult) => {
+    if ('ask' in r) return setDialog({ kind: 'pickVar', ask: r.ask })
+    setDialog(null)
+    if (view.current) requestAnimationFrame(() => applySnippet(view.current!, r.done))
+  }
+
+  /**
+   * El snippet con su número de nota y sus variables, mirando el libro tal
+   * como está ahora. null si hay que preguntar un archivo: entonces se abre la
+   * lista y se inserta al elegir.
+   */
+  const prepareSnippet = (s: Snippet): Snippet | null => {
+    const r = fillSnippet(s, book, active)
+    if ('done' in r) return r.done
+    continueSnippet(r)
+    return null
+  }
+
   const runSnippet = (s: Snippet) => {
     setDialog(null)
-    if (view.current) requestAnimationFrame(() => applySnippet(view.current!, s))
+    const ready = prepareSnippet(s)
+    if (ready && view.current) requestAnimationFrame(() => applySnippet(view.current!, ready))
   }
 
   const navigate = (path: string, h: string) => { openFile(path); setHash(h || undefined) }
@@ -623,8 +709,21 @@ export default function App() {
 
   // ---------- estructura ----------
 
+  // El índice sigue al capítulo movido, si estaba en orden de lectura.
   const doMoveSpine = (path: string, delta: number) => {
-    if (moveSpineItem(book, path, delta)) touch()
+    const before = spinePaths(book)
+    if (!moveSpineItem(book, path, delta)) return
+    followSpineInToc(book, before)
+    touch()
+  }
+
+  const doMoveSpineTo = (path: string, target: string | null) => {
+    const before = spinePaths(book)
+    if (!moveSpineBefore(book, path, target)) return
+    const toc = followSpineInToc(book, before)
+    touch()
+    const name = (p: string) => p.split('/').pop()
+    flash(`${name(path)} ${target ? `va ahora delante de ${name(target)}` : 'va ahora al final'}${toc ? ' · índice actualizado' : ''}`)
   }
 
   const doToc = (opts: { maxLevel: number; ncx: boolean }) => {
@@ -636,6 +735,87 @@ export default function App() {
         return null
       }
       return `Índice regenerado: ${r.headings.length} entrada${r.headings.length === 1 ? '' : 's'}${r.ncxPath ? ' + toc.ncx' : ''}`
+    })
+  }
+
+  const acceptWord = (word: string, where: 'personal' | 'book') => {
+    if (where === 'personal') {
+      const next = new Set(personalWords).add(word)
+      savePersonal(next)
+      setPersonalWords(next)
+      flash(`«${word}» añadida a tu diccionario`)
+    } else {
+      const next = new Set(bookWordSet).add(word)
+      saveBookWords(book, next)
+      setBookWordSet(next)
+      flash(`«${word}» aceptada en este libro`)
+    }
+  }
+
+  const doReplaceWord = (word: string, replacement: string) => {
+    bulk(`Antes de cambiar «${word}»`, () => {
+      const n = replaceWord(book, word, replacement)
+      return n ? `«${word}» → «${replacement}» en ${n} sitio${n === 1 ? '' : 's'}` : null
+    })
+  }
+
+  /** Clic derecho sobre una palabra subrayada: sugerencias y diccionarios. */
+  const openSpellMenu = async (m: SpellMenuRequest) => {
+    const list = await suggestions(m.word)
+    const fix = (s: string) => {
+      const v = view.current
+      // Por si el texto se movió mientras llegaban las sugerencias.
+      if (!v || v.state.sliceDoc(m.from, m.to) !== m.word) return
+      v.dispatch({ changes: { from: m.from, to: m.to, insert: matchCase(m.word, s) }, userEvent: 'input.spell' })
+      v.focus()
+    }
+    setSpellMenu({
+      x: m.x,
+      y: m.y,
+      items: [
+        ...(list.length
+          ? list.map(s => ({ label: matchCase(m.word, s), onClick: () => fix(s) }))
+          : [{ label: 'Sin sugerencias', disabled: true }]),
+        { separator: true },
+        { label: `Añadir «${m.word}» a mi diccionario`, onClick: () => acceptWord(m.word, 'personal') },
+        { label: 'Aceptar solo en este libro', onClick: () => acceptWord(m.word, 'book') },
+        { separator: true },
+        { label: 'Ortografía del libro…', onClick: () => setDialog({ kind: 'spell' }) },
+      ],
+    })
+  }
+
+  const doFonts = (changes: FontChanges) => {
+    setDialog(null)
+    bulk('Antes de cambiar las fuentes', () => {
+      const r = applyFonts(book, changes, fontFolder(book))
+      if (!r) {
+        alert('El libro no tiene ninguna hoja de estilos donde declarar las fuentes.')
+        return null
+      }
+      resolver.invalidate(r.cssPath)
+      for (const p of [...r.added, ...changes.remove]) resolver.invalidate(p)
+      const partes = [
+        r.added.length && `${r.added.length} añadida${r.added.length === 1 ? '' : 's'}`,
+        changes.remove.length && `${changes.remove.length} quitada${changes.remove.length === 1 ? '' : 's'}`,
+      ].filter(Boolean)
+      return `Fuentes actualizadas${partes.length ? `: ${partes.join(', ')}` : ''}`
+    })
+  }
+
+  const doSeries = (plan: Rename[]) => {
+    setDialog(null)
+    bulk('Antes de renombrar en serie', () => {
+      const n = renameSeries(book, plan)
+      if (!n) return null
+      // Lo abierto sigue abierto con su nombre nuevo.
+      const moved = new Map(plan.map(r => [r.from, r.to]))
+      const now = (p: string) => moved.get(p) ?? p
+      for (const r of plan) resolver.invalidate(r.from)
+      setOpenPaths(list => list.map(now))
+      setActive(now(active))
+      setLastDoc(now(lastDoc))
+      return `${n} archivo${n === 1 ? '' : 's'} renombrado${n === 1 ? '' : 's'}`
     })
   }
 
@@ -1114,10 +1294,14 @@ export default function App() {
         { separator: true },
         { label: 'Pasar las notas al final', onClick: doToEndnotes },
         { label: 'Devolver las notas al pie', disabled: !hasEndnotes, onClick: doToFootnotes },
+        { label: 'Revisar las notas…', onClick: () => setDialog({ kind: 'notes' }) },
         { label: 'Duplicar este archivo', disabled: !activeFile, onClick: () => doDuplicate(active) },
+        { label: 'Renombrar en serie…', onClick: () => setDialog({ kind: 'series' }) },
         { label: 'Partir capítulo…', disabled: !isDoc, onClick: () => setDialog({ kind: 'split', cursor: view.current?.state.selection.main.head ?? 0 }) },
         { separator: true },
         { label: 'Estilos de novela…', onClick: () => setDialog({ kind: 'novelStyle' }) },
+        { label: 'Fuentes incrustadas…', onClick: () => setDialog({ kind: 'fonts' }) },
+        { label: 'Ortografía del libro…', onClick: () => setDialog({ kind: 'spell' }) },
         { label: 'Plantillas de maquetación…', onClick: () => setDialog({ kind: 'templates' }) },
         { separator: true },
         { label: 'Enlaces y archivos sueltos…', onClick: () => setDialog({ kind: 'cleanup' }) },
@@ -1134,6 +1318,7 @@ export default function App() {
       items: [
         { label: 'Tema oscuro', checked: theme === 'dark', onClick: () => setTheme(t => (t === 'dark' ? 'light' : 'dark')) },
         { label: 'Vista previa oscura', checked: paper === 'dark', onClick: () => setPreviewTheme(paper === 'dark' ? 'light' : 'dark') },
+        { label: 'Subrayar la ortografía', checked: spellOn, onClick: () => setSpellOn(on => !on) },
         { separator: true },
         { label: 'Panel: vista previa', checked: pane === 'preview', onClick: () => setPane('preview') },
         { label: 'Panel: índice', checked: pane === 'toc', onClick: () => setPane('toc') },
@@ -1149,6 +1334,12 @@ export default function App() {
         { label: 'Acercar', disabled: zoom === ZOOMS[ZOOMS.length - 1], onClick: () => stepZoom(1) },
         { label: 'Alejar', disabled: zoom === ZOOMS[0], onClick: () => stepZoom(-1) },
         { label: 'Zoom al 100 %', disabled: zoom === 1, onClick: () => setZoom(1) },
+        { separator: true },
+        {
+          label: 'Restablecer el ancho de los paneles',
+          disabled: panes.sidebar == null && panes.preview == null,
+          onClick: () => setPanes({ sidebar: null, preview: null }),
+        },
         { separator: true },
         { label: 'Preferencias…', shortcut: 'Ctrl+,', onClick: () => setDialog({ kind: 'settings' }) },
       ],
@@ -1181,6 +1372,7 @@ export default function App() {
   return (
     <div
       className="app"
+      style={{ gridTemplateColumns: gridColumns(fitPanes(panes, viewport)) }}
       onDragOver={e => {
         if (!e.dataTransfer.types.includes('Files')) return
         e.preventDefault()
@@ -1221,7 +1413,7 @@ export default function App() {
         </button>
       </header>
 
-      <aside className="sidebar">
+      <aside className="sidebar" ref={sidebarRef}>
         <FileTree
           book={book}
           spine={spine}
@@ -1231,12 +1423,21 @@ export default function App() {
           onDelete={doDelete}
           onRename={doRename}
           onMoveSpine={doMoveSpine}
+          onMoveSpineTo={doMoveSpineTo}
           onSetCover={doSetCover}
           onDuplicate={doDuplicate}
           onSplit={openSplit}
           onMerge={doMerge}
         />
       </aside>
+
+      <Splitter
+        area="split1"
+        label="Ancho de la lista de archivos"
+        current={() => sidebarRef.current?.offsetWidth ?? 236}
+        onResize={w => setPanes(p => fitPanes({ ...p, sidebar: w }, viewport))}
+        onReset={() => setPanes(p => ({ ...p, sidebar: null }))}
+      />
 
       <main className="center">
         <Tabs book={book} open={openPaths} active={active} onPick={setActive} onClose={closeFile} />
@@ -1252,7 +1453,10 @@ export default function App() {
           <>
             <div className="snippet-bar" aria-label="Snippets">
               {snippets.map(s => (
-                <button key={s.name} disabled={!isText} title={s.key ? prettyKey(s.key) : s.name} onClick={() => view.current && applySnippet(view.current, s)}>
+                <button key={s.name} disabled={!isText} title={s.key ? prettyKey(s.key) : s.name} onClick={() => {
+                  const ready = prepareSnippet(s)
+                  if (ready && view.current) applySnippet(view.current, ready)
+                }}>
                   {s.name}
                 </button>
               ))}
@@ -1270,10 +1474,14 @@ export default function App() {
                 path={active}
                 doc={activeFile?.text ?? ''}
                 snippets={snippets}
+                prepareSnippet={prepareSnippet}
                 smartPaste={smartPaste}
                 pasteOptions={pasteOptions}
                 theme={theme}
                 goto={goto}
+                spellOn={spellOn}
+                spellAccepted={spellAccepted}
+                onSpellMenu={openSpellMenu}
                 onChange={onChange}
                 onCursor={setCursor}
                 onReady={v => (view.current = v)}
@@ -1289,7 +1497,16 @@ export default function App() {
         )}
       </main>
 
-      <section className="preview-pane" aria-label="Vista previa e índice">
+      <Splitter
+        area="split2"
+        label="Ancho de la vista previa"
+        invert
+        current={() => previewRef.current?.offsetWidth ?? 500}
+        onResize={w => setPanes(p => fitPanes({ ...p, preview: w }, viewport))}
+        onReset={() => setPanes(p => ({ ...p, preview: null }))}
+      />
+
+      <section className="preview-pane" aria-label="Vista previa e índice" ref={previewRef}>
         <div className="pane-title">
           <div className="seg" role="tablist" aria-label="Panel derecho">
             <button role="tab" aria-pressed={pane === 'preview'} onClick={() => setPane('preview')}>Vista previa</button>
@@ -1431,6 +1648,9 @@ export default function App() {
           onClose={() => setDialog(null)}
         />
       )}
+      {dialog?.kind === 'series' && (
+        <SeriesDialog book={book} rev={rev} onApply={doSeries} onClose={() => setDialog(null)} />
+      )}
       {dialog?.kind === 'toc' && (
         <TocDialog book={book} rev={rev} onApply={doToc} onClose={() => setDialog(null)} />
       )}
@@ -1461,6 +1681,26 @@ export default function App() {
           rev={rev}
           activePath={isDoc ? active : undefined}
           onApply={doTidy}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {spellMenu && <ContextMenu target={spellMenu} onClose={() => setSpellMenu(null)} />}
+      {dialog?.kind === 'spell' && (
+        <SpellDialog
+          book={book}
+          rev={rev}
+          accepted={spellAccepted}
+          onJump={jump}
+          onReplace={doReplaceWord}
+          onAccept={acceptWord}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === 'fonts' && (
+        <FontsDialog
+          book={book}
+          onPick={() => pickFiles('.ttf,.otf,.woff,.woff2')}
+          onApply={doFonts}
           onClose={() => setDialog(null)}
         />
       )}
@@ -1507,6 +1747,9 @@ export default function App() {
       {dialog?.kind === 'release' && (
         <ReleaseDialog book={book} rev={rev} onOpen={openFromRelease} onClose={() => setDialog(null)} />
       )}
+      {dialog?.kind === 'notes' && (
+        <NotesDialog book={book} rev={rev} onGo={jump} onClose={() => setDialog(null)} />
+      )}
       {dialog?.kind === 'dialogue' && (
         <DialogueDialog
           book={book}
@@ -1547,6 +1790,27 @@ export default function App() {
           title="Ir a un archivo"
           placeholder="Escribe parte del nombre… (↑↓ y Enter)"
           items={fileItems}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === 'pickVar' && (
+        <QuickOpen
+          key={dialog.ask.name}
+          title={`{${dialog.ask.name}}: ¿qué archivo?`}
+          placeholder="Escribe parte del nombre… (↑↓ y Enter)"
+          items={[
+            // El que se puede deducir va primero, para que baste con Enter.
+            ...(dialog.ask.suggested ? [dialog.ask.suggested] : []),
+            ...dialog.ask.choices.filter(p => p !== dialog.ask.suggested),
+          ].map(p => {
+            const text = book.files.get(p)?.text ?? ''
+            return {
+              id: p,
+              group: p === dialog.ask.suggested ? 'propuesto' : undefined,
+              label: `${p.split('/').pop()} · ${titleOf(text, p)}`,
+              run: () => continueSnippet(dialog.ask.then(p)),
+            }
+          })}
           onClose={() => setDialog(null)}
         />
       )}

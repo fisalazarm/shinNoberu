@@ -10,6 +10,8 @@
   { "name": "Separador ◇", "key": "Mod-Shift-8", "insert": "<p class=\"separador\">◇◇◇</p>" },
   { "name": "Ilustración (figure.dimg)", "insert": "<figure class=\"dimg\">\n  <img alt=\"\" src=\"../Images/|\"/>\n</figure>" },
   { "name": "Llamada a nota (N. del T.)", "insert": "<a class=\"nota\" epub:type=\"noteref\" href=\"#nota1\" id=\"ref1\" role=\"doc-noteref\">[1]</a>" },
+  { "name": "Llamada a nota (notas.xhtml)", "insert": "<a href=\"notas.xhtml#nt{}\" id=\"rf{}\"><sup>❮{}❯</sup></a>" },
+  { "name": "Detalle nota", "insert": "<p id=\"nt{}\"><a href=\"{CAPNOTA}#rf{}\"><sup>❮{}❯</sup> Texto</a></p>", "vars": { "CAPNOTA": "noteChapter" } },
   { "name": "Nota del traductor", "insert": "<aside class=\"nota-trad\" epub:type=\"footnote\" id=\"nota1\" role=\"doc-footnote\">\n  <p><a href=\"#ref1\">[1]</a> |</p>\n</aside>" },
   { "name": "Comillas 「」", "key": "Mod-Shift-9", "wrap": ["「", "」"] },
   { "name": "Comillas 『』", "key": "Mod-Shift-0", "wrap": ["『", "』"] },

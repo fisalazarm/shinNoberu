@@ -424,6 +424,14 @@ function itemrefFor(book: EpubBook, doc: Document, path: string): Element | null
   return kids(sp, 'itemref').find(r => r.getAttribute('idref') === id) ?? null
 }
 
+// Los itemref se reordenan cambiando sus atributos en vez de mover los nodos:
+// así no se toca la sangría del OPF.
+const attrsOf = (el: Element) => [...el.attributes].map(a => [a.name, a.value] as [string, string])
+const resetAttrs = (el: Element, list: [string, string][]) => {
+  for (const a of [...el.attributes]) el.removeAttribute(a.name)
+  for (const [n, v] of list) el.setAttribute(n, v)
+}
+
 /** Mueve un capítulo en el orden de lectura. `delta` es -1 (antes) o +1 (después). */
 export function moveSpineItem(book: EpubBook, path: string, delta: number): boolean {
   const doc = opfDoc(book)
@@ -435,18 +443,89 @@ export function moveSpineItem(book: EpubBook, path: string, delta: number): bool
   const j = i + delta
   if (i < 0 || j < 0 || j >= refs.length) return false
 
-  // Intercambia los atributos en vez de los nodos: así no se toca la sangría.
-  const attrsOf = (el: Element) => [...el.attributes].map(a => [a.name, a.value] as [string, string])
-  const reset = (el: Element, list: [string, string][]) => {
-    for (const a of [...el.attributes]) el.removeAttribute(a.name)
-    for (const [n, v] of list) el.setAttribute(n, v)
-  }
   const a = attrsOf(refs[i])
   const b = attrsOf(refs[j])
-  reset(refs[i], b)
-  reset(refs[j], a)
+  resetAttrs(refs[i], b)
+  resetAttrs(refs[j], a)
 
   writeOpf(book, doc)
+  return true
+}
+
+/**
+ * Lleva un capítulo a otro sitio del orden de lectura: justo delante de
+ * `before`, o al final si es null. Es lo que hace soltarlo al arrastrar.
+ */
+export function moveSpineBefore(book: EpubBook, path: string, before: string | null): boolean {
+  const doc = opfDoc(book)
+  const sp = doc && spineEl(doc)
+  if (!doc || !sp || path === before) return false
+  const refs = kids(sp, 'itemref')
+  const from = refs.indexOf(itemrefFor(book, doc, path)!)
+  const target = before == null ? refs.length : refs.indexOf(itemrefFor(book, doc, before)!)
+  if (from < 0 || target < 0) return false
+
+  const attrs = refs.map(attrsOf)
+  const [moved] = attrs.splice(from, 1)
+  // Al quitarlo, lo que iba detrás sube un puesto.
+  const to = target > from ? target - 1 : target
+  if (to === from) return false
+  attrs.splice(to, 0, moved)
+  refs.forEach((el, k) => resetAttrs(el, attrs[k]))
+
+  writeOpf(book, doc)
+  return true
+}
+
+/**
+ * Tras cambiar el orden de lectura, pone las entradas de primer nivel del
+ * índice en el orden nuevo. Solo si antes seguían el orden de lectura: si
+ * alguien las ordenó a mano de otra forma, se respeta. Los niveles de dentro
+ * viajan con su entrada.
+ */
+export function followSpineInToc(book: EpubBook, before: string[]): boolean {
+  const navPath = navItemPath(book)
+  const nav = navPath ? book.files.get(navPath) : undefined
+  const text = nav?.text
+  if (!navPath || !nav || text == null) return false
+  const region = navRegion(text, 'toc')
+  const root = region && olRange(text, region.start + region.open.length, region.end)
+  if (!root) return false
+
+  // Las entradas de primer nivel, cada una con su <li> entero.
+  const items: { start: number; end: number; path: string }[] = []
+  const inner = text.indexOf('>', root.start) + 1
+  LI_OPEN.lastIndex = inner
+  let m: RegExpExecArray | null
+  while ((m = LI_OPEN.exec(text)) && m.index < root.end) {
+    const close = closeOf(text, m.index, root.end)
+    const gt = close >= root.end ? -1 : text.indexOf('>', close)
+    // Un <li> sin cerrar o un «</li» a medias: mejor no tocar nada.
+    if (gt < 0 || gt >= root.end) return false
+    const end = gt + 1
+    const href = text.slice(m.index, end).match(ANCHOR)?.[1] ?? ''
+    const target = href.split('#')[0]
+    items.push({ start: m.index, end, path: target ? resolvePath(navPath, target) : navPath })
+    LI_OPEN.lastIndex = end
+  }
+  if (items.length < 2) return false
+
+  const after = spinePaths(book)
+  const rank = (order: string[], p: string) => order.indexOf(p)
+  if (items.some(it => rank(before, it.path) < 0 || rank(after, it.path) < 0)) return false
+  const wasInOrder = items.every((it, k) => k === 0 || rank(before, items[k - 1].path) <= rank(before, it.path))
+  if (!wasInOrder) return false
+
+  const sorted = [...items].sort((a, b) => rank(after, a.path) - rank(after, b.path))
+  if (sorted.every((it, k) => it === items[k])) return false
+
+  // Cada hueco entre entradas (saltos de línea, sangría) se queda donde estaba.
+  let out = text.slice(0, items[0].start)
+  sorted.forEach((it, k) => {
+    out += text.slice(it.start, it.end)
+    out += k + 1 < items.length ? text.slice(items[k].end, items[k + 1].start) : ''
+  })
+  nav.text = out + text.slice(items[items.length - 1].end)
   return true
 }
 

@@ -226,14 +226,47 @@ code { font-family: var(--font-mono); font-size: 0.92em; color: var(--accent); }
 .app {
   display: grid;
   height: 100%;
-  grid-template-columns: 236px minmax(0, 1fr) minmax(0, 0.9fr);
+  /* Las columnas las pone la app según lo que hayas arrastrado; esto es lo
+     de siempre, por si el estilo en línea faltara. */
+  grid-template-columns: 236px 1px minmax(0, 1fr) 1px minmax(0, 0.9fr);
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   grid-template-areas:
-    'menubar menubar menubar'
-    'toolbar toolbar toolbar'
-    'sidebar center preview'
-    'status status status';
+    'menubar menubar menubar menubar menubar'
+    'toolbar toolbar toolbar toolbar toolbar'
+    'sidebar split1 center split2 preview'
+    'status status status status status';
 }
+
+/* ---------- separadores entre paneles ---------- */
+
+/* Ocupan el sitio del borde de siempre: en reposo se ven igual que antes. */
+.splitter {
+  position: relative;
+  z-index: 5;
+  background: var(--border);
+  cursor: col-resize;
+  touch-action: none;
+  transition: background var(--ease);
+}
+/* La línea es de un píxel, pero se coge con ocho. */
+.splitter::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
+}
+.splitter:hover,
+.splitter:focus-visible,
+body.resizing .splitter:active { background: var(--accent); }
+.splitter:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--accent); }
+
+/* Mientras se arrastra, el cursor no cambia al pasar por otros sitios, no se
+   selecciona texto, y la vista previa no se queda con el ratón: un iframe se
+   traga los movimientos y el arrastre se cortaría al cruzarlo. */
+body.resizing { cursor: col-resize; user-select: none; }
+body.resizing iframe { pointer-events: none; }
 
 .toolbar {
   grid-area: toolbar;
@@ -275,7 +308,6 @@ code { font-family: var(--font-mono); font-size: 0.92em; color: var(--accent); }
   overflow: auto;
   padding-bottom: 12px;
   background: var(--panel);
-  border-right: 1px solid var(--border);
 }
 .center { grid-area: center; display: flex; flex-direction: column; min-width: 0; background: var(--canvas); }
 .preview-pane {
@@ -284,7 +316,6 @@ code { font-family: var(--font-mono); font-size: 0.92em; color: var(--accent); }
   flex-direction: column;
   min-width: 0;
   background: var(--sunken);
-  border-left: 1px solid var(--border);
 }
 
 .statusbar {
@@ -354,6 +385,25 @@ code { font-family: var(--font-mono); font-size: 0.92em; color: var(--accent); }
 }
 .tree li.active > .file { color: var(--accent); font-weight: 550; }
 .tree li.active > .file .icon { color: var(--accent); }
+
+/* Arrastrar capítulos: una línea marca dónde va a caer. */
+.tree li.dragged { opacity: 0.45; }
+.tree li.drop-before::after,
+.tree li.drop-after::after {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.tree li.drop-before::after { top: -1px; }
+.tree li.drop-after::after { bottom: -1px; }
+body.dragging-row { cursor: grabbing; user-select: none; }
+body.dragging-row .tree li:hover > .file-actions { display: none; }
+body.dragging-row iframe { pointer-events: none; }
 
 .tree .file-actions { display: none; gap: 1px; padding-right: 6px; }
 .tree li:hover > .file-actions, .tree li.active > .file-actions { display: flex; }
@@ -1370,8 +1420,18 @@ code { font-family: var(--font-mono); font-size: 0.92em; color: var(--accent); }
 .snip-add { border-radius: 0; border: 0; border-top: 1px solid var(--border); justify-content: center; padding: 7px; }
 
 .snip-form { display: flex; flex-direction: column; gap: 11px; min-width: 0; overflow: auto; max-height: 52vh; }
+/* Con mucho contenido, el formulario hace scroll: sin esto, los campos (que
+   llevan min-height: 0) se aplastaban y se montaban unos encima de otros. */
+.snip-form > * { flex-shrink: 0; }
 .snip-form .radio-list > label { padding: 7px 10px; }
 .snip-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* Variables del snippet: una fila por cada {NOMBRE}. */
+.snip-vars { display: flex; flex-direction: column; gap: 6px; }
+.snip-var { display: flex; gap: 8px; align-items: center; }
+.snip-var code { flex: 0 0 auto; min-width: 92px; color: var(--accent); font: 12px var(--font-mono); }
+.snip-var select { flex: 0 0 auto; }
+.snip-var input { flex: 1; min-width: 0; }
 .snip-key { display: flex; gap: 6px; align-items: center; }
 .snip-key input { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 12px; cursor: pointer; }
 .snip-text { height: 92px; resize: vertical; font: 12px/1.6 var(--font-mono); }
@@ -1730,3 +1790,138 @@ code { font-family: var(--font-mono); font-size: 0.92em; color: var(--accent); }
   width: 2px;
   background: var(--warn);
 }
+
+/* ---------- renombrar en serie ---------- */
+
+.series-list {
+  max-height: 46vh;
+  overflow: auto;
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 4px 0;
+}
+.series-tools { display: flex; gap: 4px; padding: 2px 8px 4px; border-bottom: 1px solid var(--border); }
+.series-list ul { list-style: none; margin: 0; padding: 0; }
+.series-list label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 11em) 1.2em minmax(0, 11em) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 3px 10px;
+  font-size: 12.5px;
+}
+.series-list li:hover { background: var(--hover); }
+.series-list .from, .series-list .to { font-family: var(--font-mono); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.series-list .to { color: var(--accent); }
+.series-list .arrow { color: var(--muted); }
+.series-list .title { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.series-list li.off .from { color: var(--muted); }
+.error-text { color: var(--danger); }
+
+/* ---------- fuentes incrustadas ---------- */
+
+.fonts-dialog { width: min(980px, 94vw); }
+.fonts-body { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; min-height: 0; overflow: auto; }
+.fonts-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.fonts-files .lbl, .fonts-use .lbl { font-weight: 600; font-size: 12.5px; }
+.font-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 52vh; overflow: auto; }
+.font-rows li { border: 1px solid var(--border); border-radius: var(--r-md); padding: 7px 9px; background: var(--canvas); }
+.font-rows li.removed { opacity: 0.5; }
+.font-rows li.removed .font-family { text-decoration: line-through; }
+.font-row-top { display: flex; gap: 6px; align-items: center; }
+.font-row-top .font-family { flex: 1; min-width: 0; }
+.font-row-top .check { display: flex; gap: 4px; align-items: center; font-size: 12px; white-space: nowrap; }
+.font-row-meta { display: flex; flex-wrap: wrap; gap: 4px 9px; align-items: baseline; margin-top: 5px; font-size: 11.5px; color: var(--muted); }
+.font-row-meta code { font-size: 11px; }
+.font-sample { font-size: 17px; color: var(--text); min-width: 5.5em; }
+.font-row-meta .tag { border-radius: 8px; padding: 0 6px; background: var(--raised); color: var(--text-dim); font-size: 10.5px; }
+.font-row-meta .tag.muted-tag { color: var(--muted); }
+.font-row-meta .tag.bad { background: var(--danger-soft); color: var(--danger); }
+.font-row-meta .tag.unsure { color: var(--warn); }
+.font-row-meta .lic { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.fonts-roles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin: 6px 0 12px; }
+.fonts-preview {
+  background: #fdfcf9;
+  color: #1d1b18;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 18px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.fonts-preview h3 { margin: 0 0 10px; text-align: center; font-size: 21px; font-weight: 600; }
+.fonts-preview p { margin: 0; text-align: justify; }
+.fonts-preview .drop { float: left; font-size: 3.1em; line-height: 0.86; padding: 0.04em 0.06em 0 0; }
+.warn-text { color: var(--warn); }
+@media (max-width: 760px) { .fonts-body { grid-template-columns: 1fr; } }
+
+/* ---------- revisión de las notas ---------- */
+
+.notes-list li.error { background: var(--danger-soft); }
+.notes-list li.error .tag { color: var(--danger); }
+
+/* ---------- ortografía ---------- */
+
+.cm-editor .cm-misspelled {
+  text-decoration: underline wavy var(--danger);
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+.spell-dialog { width: min(920px, 94vw); }
+.spell-body { display: grid; grid-template-columns: minmax(180px, 0.8fr) minmax(0, 2fr); gap: 16px; min-height: 0; }
+.spell-list { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.spell-list .check { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--text-dim); }
+.spell-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 3px 0;
+  height: 52vh;
+  overflow: auto;
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.spell-list li button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 3px 10px;
+  text-align: left;
+  color: var(--text);
+}
+.spell-list li button:hover:not(:disabled) { background: var(--hover); border-color: transparent; }
+.spell-list li button.active { background: var(--accent-soft); color: var(--accent); }
+.spell-list .n { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.spell-detail { display: flex; flex-direction: column; gap: 10px; min-width: 0; height: calc(52vh + 58px); overflow: auto; }
+.spell-detail h3 { margin: 0; font-size: 18px; }
+.spell-detail .lbl { font-weight: 600; font-size: 12px; }
+.spell-fix { display: flex; flex-direction: column; gap: 6px; }
+.spell-sugg { display: flex; flex-wrap: wrap; gap: 6px; min-height: 28px; align-items: center; }
+.spell-custom { display: flex; gap: 6px; }
+.spell-custom input { flex: 1; min-width: 0; }
+.spell-keep { display: flex; flex-wrap: wrap; gap: 6px; }
+.spell-hits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.spell-hits button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 7.5em minmax(0, 1fr);
+  gap: 8px;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  color: var(--text-dim);
+  font-size: 12.5px;
+}
+.spell-hits button:hover:not(:disabled) { background: var(--hover); border-color: transparent; }
+.spell-hits .file { font-family: var(--font-mono); font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spell-hits .ctx { font-family: var(--font-serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spell-hits mark { background: var(--danger-soft); color: var(--danger); border-radius: 2px; padding: 0 1px; }
+@media (max-width: 700px) { .spell-body { grid-template-columns: 1fr; } }

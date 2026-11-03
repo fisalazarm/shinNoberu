@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon'
 import ContextMenu, { type ContextTarget } from './ContextMenu'
 import { dirname, type EpubBook, type EpubFile } from '../lib/epub'
@@ -13,6 +13,8 @@ interface Props {
   onDelete: (path: string) => void
   onRename: (path: string) => void
   onMoveSpine: (path: string, delta: number) => void
+  /** Soltar un capítulo arrastrado: va delante de `before`, o al final si es null. */
+  onMoveSpineTo: (path: string, before: string | null) => void
   onSetCover: (path: string) => void
   onDuplicate: (path: string) => void
   onSplit: (path: string) => void
@@ -30,6 +32,8 @@ interface DirNode {
 /** Orden habitual de las carpetas de un EPUB; lo demás va detrás. */
 const PREFERRED = ['Text', 'Styles', 'Images', 'Fonts', 'Audio', 'Video', 'Misc']
 const PROTECTED = /^(mimetype|META-INF\/container\.xml)$|\.opf$/
+/** Lo que hay que mover el puntero para que un clic pase a ser un arrastre. */
+const DRAG_START = 5
 
 function buildTree(book: EpubBook): DirNode {
   const opfDir = dirname(book.opfPath)
@@ -74,8 +78,75 @@ export default function FileTree(props: Props) {
   // Con Ctrl se van marcando capítulos para fusionarlos.
   const [marked, setMarked] = useState<Set<string>>(new Set())
 
+  // Arrastrar un capítulo para cambiarlo de sitio en el orden de lectura.
+  const [drag, setDrag] = useState<{ path: string; over?: string; after?: boolean } | null>(null)
+  const press = useRef<{ path: string; x: number; y: number } | null>(null)
+  // El clic que llega al soltar no debe abrir el archivo.
+  const justDropped = useRef(false)
+  const navRef = useRef<HTMLElement>(null)
+
   const spineIndex = new Map(spine.map((p, i) => [p, i]))
   const root = buildTree(book)
+
+  const dragging = drag != null
+  useEffect(() => {
+    if (!dragging) return
+    document.body.classList.add('dragging-row')
+    return () => document.body.classList.remove('dragging-row')
+  }, [dragging])
+
+  const startPress = (e: React.PointerEvent, path: string) => {
+    if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return
+    press.current = { path, x: e.clientX, y: e.clientY }
+    let active = false
+    let last: { path: string; over?: string; after?: boolean } = { path }
+
+    const move = (ev: PointerEvent) => {
+      const p = press.current
+      if (!p) return
+      if (!active) {
+        if (Math.hypot(ev.clientX - p.x, ev.clientY - p.y) < DRAG_START) return
+        active = true
+      }
+      // Cerca de los bordes, la lista se desplaza para llegar a lo que no se ve.
+      const box = navRef.current?.closest('.sidebar') ?? navRef.current
+      if (box) {
+        const r = box.getBoundingClientRect()
+        if (ev.clientY < r.top + 24) box.scrollTop -= 12
+        else if (ev.clientY > r.bottom - 24) box.scrollTop += 12
+      }
+      const row = document.elementFromPoint(ev.clientX, ev.clientY)?.closest<HTMLElement>('li[data-spine]')
+      const over = row?.dataset.path
+      if (over && over !== p.path) {
+        const r = row!.getBoundingClientRect()
+        last = { path: p.path, over, after: ev.clientY > r.top + r.height / 2 }
+      } else {
+        last = { path: p.path }
+      }
+      setDrag(last)
+    }
+    const stop = (drop: boolean) => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('keydown', key, true)
+      press.current = null
+      setDrag(null)
+      if (!active) return
+      justDropped.current = true
+      setTimeout(() => { justDropped.current = false }, 0)
+      if (!drop || !last.over) return
+      const at = spineIndex.get(last.over)!
+      const before = last.after ? (spine[at + 1] ?? null) : last.over
+      if (before !== last.path) props.onMoveSpineTo(last.path, before)
+    }
+    const up = () => stop(true)
+    const key = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); stop(false) }
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('keydown', key, true)
+  }
 
   const toggle = (path: string) =>
     setCollapsed(prev => {
@@ -153,15 +224,31 @@ export default function FileTree(props: Props) {
     const isDoc = f.mediaType === 'application/xhtml+xml'
     const isImage = f.mediaType.startsWith('image/')
     const isCover = isImage && f.path === coverPath
+    const movable = isDoc && inSpine
+    const dropMark = drag?.over === f.path ? (drag.after ? 'drop-after' : 'drop-before') : ''
 
     return (
-      <li key={f.path} className={`${f.path === active ? 'active' : ''} ${marked.has(f.path) ? 'marked' : ''}`}>
+      <li
+        key={f.path}
+        className={`${f.path === active ? 'active' : ''} ${marked.has(f.path) ? 'marked' : ''} ${drag?.path === f.path && drag.over ? 'dragged' : ''} ${dropMark}`}
+        data-spine={movable ? '' : undefined}
+        data-path={f.path}
+      >
         <button
           className="row file"
-          title={isDoc ? `${f.path}
+          title={movable
+            ? `${f.path}
+Arrástralo para cambiarlo de sitio en el orden de lectura
+Ctrl+clic para marcarlo y fusionarlo`
+            : isDoc ? `${f.path}
 Ctrl+clic para marcarlo y fusionarlo` : f.path}
           style={{ paddingLeft: `${10 + depth * 13}px` }}
-          onClick={e => (isDoc && (e.ctrlKey || e.metaKey) ? toggleMark(f.path) : props.onOpen(f.path))}
+          onPointerDown={movable ? e => startPress(e, f.path) : undefined}
+          onClick={e => {
+            if (justDropped.current) return
+            if (isDoc && (e.ctrlKey || e.metaKey)) toggleMark(f.path)
+            else props.onOpen(f.path)
+          }}
           onContextMenu={e => openContext(e, f)}
         >
           {isCover
@@ -237,7 +324,7 @@ Ctrl+clic para marcarlo y fusionarlo` : f.path}
   }
 
   return (
-    <nav className="tree" aria-label="Archivos del libro">
+    <nav className="tree" aria-label="Archivos del libro" ref={navRef}>
       <ul>
         {sortedDirs(root).map(d => renderDir(d, 0))}
         {sortedFiles(root).map(f => renderFile(f, 0))}

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { addToOpf, spinePaths, type EpubBook } from './epub'
 import { newEpub, xhtmlTemplate } from './newEpub'
 import {
-  buildNavOl, collectHeadings, moveSpineItem, plainText, regenerateToc, writeNcx,
+  buildNavOl, collectHeadings, followSpineInToc, moveSpineBefore, moveSpineItem, plainText,
+  readToc, regenerateToc, writeNcx,
 } from './structure'
 
 /** Añade un capítulo con el cuerpo dado y lo mete en el spine. */
@@ -162,5 +163,88 @@ describe('moveSpineItem', () => {
     moveSpineItem(book, 'OEBPS/Text/Cap02.xhtml', -1)
     expect(opf.text).toMatch(/<itemref idref="Cap02\.xhtml" linear="no"\/>/)
     expect(spinePaths(book)[0]).toBe('OEBPS/Text/Cap02.xhtml')
+  })
+})
+
+describe('moveSpineBefore', () => {
+  const tres = () => {
+    const book = newEpub()
+    chapter(book, 'Cap02.xhtml', '<h1>Dos</h1>')
+    chapter(book, 'Cap03.xhtml', '<h1>Tres</h1>')
+    return book
+  }
+  const nombres = (book: EpubBook) => spinePaths(book).map(p => p.split('/').pop())
+
+  it('sube un capítulo varios puestos de golpe', () => {
+    const book = tres()
+    expect(moveSpineBefore(book, 'OEBPS/Text/Cap03.xhtml', 'OEBPS/Text/Cap01.xhtml')).toBe(true)
+    expect(nombres(book)).toEqual(['Cap03.xhtml', 'Cap01.xhtml', 'Cap02.xhtml'])
+  })
+
+  it('lo baja delante del que se indica', () => {
+    const book = tres()
+    expect(moveSpineBefore(book, 'OEBPS/Text/Cap01.xhtml', 'OEBPS/Text/Cap03.xhtml')).toBe(true)
+    expect(nombres(book)).toEqual(['Cap02.xhtml', 'Cap01.xhtml', 'Cap03.xhtml'])
+  })
+
+  it('con null lo lleva al final', () => {
+    const book = tres()
+    expect(moveSpineBefore(book, 'OEBPS/Text/Cap01.xhtml', null)).toBe(true)
+    expect(nombres(book)).toEqual(['Cap02.xhtml', 'Cap03.xhtml', 'Cap01.xhtml'])
+  })
+
+  it('soltarlo donde ya estaba no cambia nada', () => {
+    const book = tres()
+    expect(moveSpineBefore(book, 'OEBPS/Text/Cap01.xhtml', 'OEBPS/Text/Cap02.xhtml')).toBe(false)
+    expect(moveSpineBefore(book, 'OEBPS/Text/Cap03.xhtml', null)).toBe(false)
+  })
+})
+
+describe('followSpineInToc', () => {
+  const conIndice = () => {
+    const book = newEpub()
+    chapter(book, 'Cap02.xhtml', '<h1>Dos</h1>\n<h2>Parte de dos</h2>')
+    chapter(book, 'Cap03.xhtml', '<h1>Tres</h1>')
+    regenerateToc(book, { maxLevel: 2 })
+    return book
+  }
+  const titulos = (book: EpubBook) => readToc(book).map(e => [e.title, ...e.children.map(c => c.title)].join(' > '))
+
+  it('el índice sigue al capítulo movido, con sus subentradas', () => {
+    const book = conIndice()
+    const antes = spinePaths(book)
+    moveSpineBefore(book, 'OEBPS/Text/Cap02.xhtml', null)
+    expect(followSpineInToc(book, antes)).toBe(true)
+    expect(titulos(book)).toEqual(['Capítulo 1', 'Tres', 'Dos > Parte de dos'])
+  })
+
+  it('un índice ordenado a mano de otra forma no se toca', () => {
+    const book = conIndice()
+    const n = book.files.get('OEBPS/Text/toc.xhtml')!
+    // El 3 delante del 2 a propósito.
+    const [uno, dos, tres] = readToc(book).map(e => e.title)
+    expect([uno, dos, tres]).toEqual(['Capítulo 1', 'Dos', 'Tres'])
+    n.text = n.text!.replace(/(<li>\s*<a[^>]*>Dos[\s\S]*?<\/li>\s*<\/ol>\s*<\/li>)(\s*)(<li>\s*<a[^>]*>Tres<\/a>\s*<\/li>)/, '$3$2$1')
+    expect(readToc(book).map(e => e.title)).toEqual(['Capítulo 1', 'Tres', 'Dos'])
+    const manual = nav(book)
+    const antes = spinePaths(book)
+    moveSpineBefore(book, 'OEBPS/Text/Cap01.xhtml', null)
+    expect(followSpineInToc(book, antes)).toBe(false)
+    expect(nav(book)).toBe(manual)
+  })
+})
+
+describe('followSpineInToc con el índice a medio escribir', () => {
+  it('un <li> sin cerrar no cuelga ni toca nada', () => {
+    const book = newEpub()
+    chapter(book, 'Cap02.xhtml', '<h1>Dos</h1>')
+    regenerateToc(book)
+    const n = book.files.get('OEBPS/Text/toc.xhtml')!
+    n.text = n.text!.replace(/<\/li>(\s*<\/ol>)/, '$1')
+    const antes = n.text
+    const orden = spinePaths(book)
+    moveSpineBefore(book, 'OEBPS/Text/Cap02.xhtml', 'OEBPS/Text/Cap01.xhtml')
+    expect(followSpineInToc(book, orden)).toBe(false)
+    expect(n.text).toBe(antes)
   })
 })
